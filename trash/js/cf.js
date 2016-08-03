@@ -1,3 +1,8 @@
+/*global Components, gBrowser, Cu, XPathResult*/
+/*jslint white: true */
+/*jslint plusplus: true */
+/*jshint esversion: 6 */
+    
     var Cc = Components.classes;
     var Ci = Components.interfaces;
     var document = gBrowser.contentDocument;
@@ -5,10 +10,126 @@
     var console = (Cu.import("resource://gre/modules/Console.jsm", {})).console;
     
     //var all =  document.getElementsByTagName("*");
-  
+
+function deepCompare () {
+  var i, l, leftChain, rightChain;
+
+  function compare2Objects (x, y) {
+    var p;
+
+    // remember that NaN === NaN returns false
+    // and isNaN(undefined) returns true
+    if (isNaN(x) && isNaN(y) && typeof x === 'number' && typeof y === 'number') {
+         return true;
+    }
+
+    // Compare primitives and functions.     
+    // Check if both arguments link to the same object.
+    // Especially useful on the step where we compare prototypes
+    if (x === y) {
+        return true;
+    }
+
+    // Works in case when functions are created in constructor.
+    // Comparing dates is a common scenario. Another built-ins?
+    // We can even handle functions passed across iframes
+    if ((typeof x === 'function' && typeof y === 'function') ||
+       (x instanceof Date && y instanceof Date) ||
+       (x instanceof RegExp && y instanceof RegExp) ||
+       (x instanceof String && y instanceof String) ||
+       (x instanceof Number && y instanceof Number)) {
+        return x.toString() === y.toString();
+    }
+
+    // At last checking prototypes as good as we can
+    if (!(x instanceof Object && y instanceof Object)) {
+        return false;
+    }
+
+    if (x.isPrototypeOf(y) || y.isPrototypeOf(x)) {
+        return false;
+    }
+
+    if (x.constructor !== y.constructor) {
+        return false;
+    }
+
+    if (x.prototype !== y.prototype) {
+        return false;
+    }
+
+    // Check for infinitive linking loops
+    if (leftChain.indexOf(x) > -1 || rightChain.indexOf(y) > -1) {
+         return false;
+    }
+
+    // Quick checking of one object being a subset of another.
+    // todo: cache the structure of arguments[0] for performance
+    for (p in y) {
+        if (y.hasOwnProperty(p) !== x.hasOwnProperty(p)) {
+            return false;
+        }
+        else if (typeof y[p] !== typeof x[p]) {
+            return false;
+        }
+    }
+
+    for (p in x) {
+        if (y.hasOwnProperty(p) !== x.hasOwnProperty(p)) {
+            return false;
+        }
+        else if (typeof y[p] !== typeof x[p]) {
+            return false;
+        }
+
+        switch (typeof (x[p])) {
+            case 'object':
+            case 'function':
+
+                leftChain.push(x);
+                rightChain.push(y);
+
+                if (!compare2Objects (x[p], y[p])) {
+                    return false;
+                }
+
+                leftChain.pop();
+                rightChain.pop();
+                break;
+
+            default:
+                if (x[p] !== y[p]) {
+                    return false;
+                }
+                break;
+        }
+    }
+
+    return true;
+  }
+
+  if (arguments.length < 1) {
+    return true; //Die silently? Don't know how to handle such case, please help...
+    // throw "Need two or more arguments to compare";
+  }
+
+  for (i = 1, l = arguments.length; i < l; i++) {
+
+      leftChain = []; //Todo: this can be cached
+      rightChain = [];
+
+      if (!compare2Objects(arguments[0], arguments[i])) {
+          return false;
+      }
+  }
+
+  return true;
+}
+
     function sleep(milliseconds) {
+      let i;
       var start = new Date().getTime();
-      for (var i = 0; i < 1e7; i++) {
+      for (i = 0; i < 1e7; i++) {
         if ((new Date().getTime() - start) > milliseconds){
           break;
         }
@@ -16,13 +137,13 @@
     }
   
     var numNodes = function(xp,document) {
-      iterator=document.evaluate(xp, document.body, null, XPathResult.ANY_TYPE, null);
+      let iterator=document.evaluate(xp, document.body, null, XPathResult.ANY_TYPE, null);
       let len=0;
-      for(node=iterator.iterateNext();node;node=iterator.iterateNext()) {
+      for(let node=iterator.iterateNext();node;node=iterator.iterateNext()) {
         len++;
       }
       return len;
-    }
+    };
     
     var getXpath = function(document,elm) {
       var allNodes = document.getElementsByTagName('*'); 
@@ -34,7 +155,7 @@
               uniqueIdCount++;
               if (uniqueIdCount > 1) 
                 break;
-          };
+          }
           if ( uniqueIdCount == 1) {
             segs.unshift('id("' + elm.getAttribute('id') + '")'); 
             return segs.join('/');
@@ -42,7 +163,7 @@
         }
         let cnt=0;
         if (elm.hasAttribute('class')) {
-          for(sib=elm.parentNode.firstChild;sib;sib=sib.nextSibling) {
+          for(let sib=elm.parentNode.firstChild;sib;sib=sib.nextSibling) {
             if( sib.nodeType==1 && sib.hasAttribute('class') && sib.getAttribute('class')==elm.getAttribute('class') ) {
               cnt+=1;
             }
@@ -53,7 +174,7 @@
         }
         if(cnt!=1) {
           let i=1;
-          for (sib = elm.previousSibling; sib; sib = sib.previousSibling) {
+          for (let sib = elm.previousSibling; sib; sib = sib.previousSibling) {
             if (sib.localName == elm.localName) {
               i++;
             }
@@ -62,7 +183,7 @@
         }
         let xp=segs.join('/');
         xp='//'+xp;
-        len=numNodes(xp,document);
+        let len=numNodes(xp,document);
         //console.log('logxp: '+xp+'   ___'+len);
         if (len === 1) {
           return xp;
@@ -78,15 +199,15 @@
     var getXpathSimple = function(document,elm) {
       for (var segs = []; elm && elm.nodeType == 1; elm = elm.parentNode) {
         let i=1;
-        for (sib = elm.previousSibling; sib; sib = sib.previousSibling) {
+        for (let sib = elm.previousSibling; sib; sib = sib.previousSibling) {
           if (sib.localName == elm.localName) {
             i++;
           }
         }
         segs.unshift(elm.localName.toLowerCase() + '[' + i + ']'); 
       }
-      return segs.join('/')
-    }
+      return segs.join('/');
+    };
 
     var isVisible = function(elem) {
       //var val=elem.style.display;
@@ -97,7 +218,7 @@
     var awayElem = function(elem) {
         //TODO протокол ( for ex. mailto:  ) не уводит со страницы.
         //Надо его добавить.
-        if(elem.tagName='a' && elem.hasAttribute('href')) {
+        if(elem.tagName=='a' && elem.hasAttribute('href')) {
           let href=elem.getAttribute('href');
           if(href[0]=='/' || href.substring(0,5)=='http://')
             return true;
@@ -117,7 +238,8 @@
         }
     };
     
-function ContfetcherPage(document) {
+    
+    function  ContfetcherPage(document) {
       /*
         Выделяем все элементы, которые:
           1) имеют на себе click callback
@@ -159,11 +281,12 @@ function ContfetcherPage(document) {
         return elService.hasListenersFor(elem,'click') && !awayElem(elem) && isVisible(elem);
       };
       this.addInt = function(elem,key,n) {
-        let newWal=parseInt(activeElem.getAttribute(key))+n;
+        let newWal=parseInt(elem.getAttribute(key))+n;
         elem.setAttribute(key,newWal);
       };
       this.getElementByCfId = function(cf_id,Except=true) {
         let allNodes = this.document.getElementsByTagName('*');
+        let elem;
         for(let i=0;i<allNodes.length;i++) {
           elem=allNodes[i];
           if( elem.hasAttribute('contfetcher_id') && elem.getAttribute('contfetcher_id')==cf_id ) {
@@ -178,10 +301,10 @@ function ContfetcherPage(document) {
       this.pushButton = function(cf_id) {
         this.layer+=1;
         this.last_pushed_button=cf_id;
-        activeElem=this.getElementByCfId(cf_id);
+        let activeElem=this.getElementByCfId(cf_id);
         let evt = this.document.createEvent("MouseEvents");
         evt.initEvent("click", true, true);
-        ajaxStor=document.getElementById('contfetcherAjaxStorage');
+        let ajaxStor=document.getElementById('contfetcherAjaxStorage');
         if(ajaxStor){
           ajaxStor.remove();
         }
@@ -194,11 +317,11 @@ function ContfetcherPage(document) {
         return true;
       };
       this.checkButtonPushed = function() {
-        ajaxStor=document.getElementById('contfetcherAjaxStorage');
+        let ajaxStor=document.getElementById('contfetcherAjaxStorage');
         if(!ajaxStor) {
           console.log('WARNING! function:checkButtonPush reason: element with id=contfetcherAjaxStorage not found');
         }
-        childs=ajaxStor.childNodes;
+        let childs=ajaxStor.childNodes;
         let allFin=true;
         for(let k=0;k<childs.length;k++) {
           if(childs[k].nodeType==1 && childs[k].getAttribute('status')!="finished") {
@@ -211,6 +334,7 @@ function ContfetcherPage(document) {
         else
           return false;
       };
+      /*
       this.getElemFeatures = function(elem) {
               var o = {
                 link:   undefined,
@@ -220,61 +344,70 @@ function ContfetcherPage(document) {
                 callbacks:[],
                 href:   elem.href,
                 color:  elem.style.color
-                
               };
 
       };
+      */
+      
       this.addNewButton = function(x) {
         this.buttons.push(x);
       };
+/*
       this.compare_obj = function(x,y) {
-        /*TODO
-          это сравнение некорректное. Если свойство будет объект, то
-          сравнение будет некорректным.
-        */
+        //TODO
+        //это сравнение некорректное. Если свойство будет объект, то
+        //сравнение будет некорректным.
         for(p in x):
           if( x[p]!=y[p] ) return false;
         for(p in y):
           if( x[p]!=y[p] ) return false;
         return true;
       };
+*/
       this.findFeatures = function(bf) {
         let features = this.buttons;
         for(i=0;i<features.length;i++) {
           ebf=features[i];
           f1=ebf.features;
           f2=bf.features;
-          if( this.compare_obj(f1,f2) )
+          if( deepCompare(f1,f2) )
             return ebf;
         }
         return undefined;
       };
       this.computeElemFeatures = function(elem) {
         childs=elem.childNodes;
-        /*TODO
-          надо сделать конвертацию DOM поддерева во что-то простое,
-          например строку или объект.
-          каждый узел должен представляться след. сваойствами:
-            1. tagname
-            2. text
-            3. callbacks
-            4. href
-            5. background-color
-            6. font-color
-            7. font-size
-            8. font-type
-        */
+        //TODO
+        //надо сделать конвертацию DOM поддерева во что-то простое,
+        //например строку или объект.
+        //каждый узел должен представляться след. сваойствами:
+        //  1. tagname
+        //  2. text
+        //  3. callbacks
+        //  4. href
+        //  5. background-color
+        //  6. font-color
+        //  7. font-size
+        //  8. font-type
+        return {
+          text:elem.text,
+          tagName:elem.tagName
+        };
       };
       this.enumerateElements = function(cf_id) {
-        if(cf_id>0)
-          activeElem=this.getElementByCfId(cf_id);
-        if(cf_id==undefined) {
+        let activeElem;
+        if(cf_id===undefined) {
           cf_id = this.last_pushed_button;
         }
+        /*
+        if(cf_id>0) {
+          activeElem=this.getElementByCfId(cf_id);
+        }*/
         let nl=0;
         let newnl=0;
         let newActiveElems=[];
         let allNodes = this.document.getElementsByTagName('*');
+        let elem;
         for(let i=0;i<allNodes.length;i++) {
           elem=allNodes[i];
           if( !elem.hasAttribute('contfetcher_layer') ) {
@@ -292,59 +425,65 @@ function ContfetcherPage(document) {
           }
           if ( this.enabledButtonCond(elem) ) { /*this is button*/
             if(!elem.hasAttribute('contfetcher_id')) {
-              let buttonId=this.cnt;
-              let nl=0;
-              let newnl=0;
-              let dry=0;
-              let nclick=0;
+              this.log('button found')
+              let buttonId;
+              let local_nl=0;
+              let local_newnl=0;
+              let local_dry=0;
+              let local_nclick=0;
               /*check if elem exists in buttons*/
               let bf = {};
-              bf['features'] = this.computeElemFeatures(elem);
-              existBf= this.findFeatures(bf);
+              bf.features = this.computeElemFeatures(elem);
+              let existBf= this.findFeatures(bf);
               if( existBf ) {
+                this.log('\tthis old button');
                 /*эта кнопка уже встречалась ранее*/
-                let cfp  =exist_bf['contfetcher_params'];
-                buttonId=cfp['contfetcher_id'];
-                nl=      cfp['contfetcher_nl'];
-                newnl=   cfp['contfetcher_newnl'];
-                dry=     cfp['contfetcher_dry'];
+                let cfp  =existBf.cf_params;
+                buttonId=cfp.cf_id;
+                local_nl=      cfp.cf_nl;
+                local_newnl=   cfp.cf_newnl;
+                local_dry=     cfp.cf_dry;
+                local_nclick=  cfp.cf_nclick;
               }
               else {
+                this.log('\tthis new button');
                 buttonId=this.cnt;
                 this.cnt+=1;
-                bf['contfetcher_params'] = {
-                  contfetcher_id:   buttonId,
-                  contfetcher_nl:   nl,
-                  contfetcher_newnl:newnl,
-                  contfetcher_dry:  dry
+                bf.cf_params = {
+                  cf_id:   buttonId,
+                  cf_nl:     local_nl,
+                  cf_newnl:  local_newnl,
+                  cf_dry:    local_dry,
+                  cf_nclick: local_nclick
                 };
                 /*Возможно образовалась коллизия по признакам.
                   А именно, elem имеет такие же признаки, как и какая-то
                   другая кнопка, при этом другая кнопка существует сейчас.
                 */
-                colliz=getElementByCfId(buttonId,false);
+                let colliz=this.getElementByCfId(buttonId,false);
                 if(colliz)
                   throw "collision: "+JSON.stringify(bf);
                 this.buttons.push(bf);
               }
               elem.setAttribute('contfetcher_id',buttonId);
               elem.setAttribute('contfetcher_status',"enabled");
-              elem.setAttribute('contfetcher_nl',nl);
-              elem.setAttribute('contfetcher_newnl',newnl);
-              elem.setAttribute('contfetcher_dry',dry);
-              elem.setAttribute('contfetcher_nclick',nclick);
+              elem.setAttribute('contfetcher_nl',local_nl);
+              elem.setAttribute('contfetcher_newnl',local_newnl);
+              elem.setAttribute('contfetcher_dry',local_dry);
+              elem.setAttribute('contfetcher_nclick',local_nclick);
               newActiveElems.push(elem);
             }
             else { /*has contfetcher_id*/
               elem.setAttribute('contfetcher_status','enabled');
             }
           }
-          else if(elem.hasAttribute('contfetcher_id') && !enabledButtonCond(elem)) {
+          else if(elem.hasAttribute('contfetcher_id') && !this.enabledButtonCond(elem)) {
             elem.setAttribute('contfetcher_status','disabled');
           }
         }
-        if(cf_id > 0) {
-          if(newnl==0) {
+        activeElem=this.getElementByCfId(cf_id,false);
+        if(activeElem) {
+          if(newnl===0) {
             this.addInt(activeElem,'contfetcher_dry',1);
           }
           else {
@@ -354,6 +493,27 @@ function ContfetcherPage(document) {
           this.addInt(activeElem,'contfetcher_newnl',newnl);
         }
         
+        if(cf_id>0) {
+          let pushedButton=undefined;
+          for(let i=0;i<this.buttons.length;i++) {
+            let button = this.buttons[i];
+            if(button.cf_params.cf_id===cf_id) {
+              pushedButton=button;
+              break;
+            }
+          }
+          if(pushedButton===undefined){
+            throw "pushed button not found";
+          }
+          if(newnl===0) {
+            pushedButton.cf_params.cf_dry+=1;
+          }
+          else {
+            pushedButton.cf_params.cf_dry=0;
+          }
+          pushedButton.nl+=nl;
+          pushedButton.newnl+=newnl;
+        }
         if(newActiveElems.length>0) {
           this.lastActiveElems=newActiveElems;
         }
@@ -362,9 +522,12 @@ function ContfetcherPage(document) {
       this.getNextButton = function() {
         
       };
+      this.log = function() {
+        console.log(arguments);
+      }
       
       this.enumerateElements(0);
-};
+}
 
     //var curPage=contfetcherPage(document);
 /*
