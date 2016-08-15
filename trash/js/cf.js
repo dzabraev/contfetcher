@@ -11,6 +11,65 @@
     
     //var all =  document.getElementsByTagName("*");
 
+  function getElementByCfId(document,cf_id,Except=true) {
+        let allNodes = document.getElementsByTagName('*');
+        let elem;
+        for(let i=0;i<allNodes.length;i++) {
+          elem=allNodes[i];
+          if( elem.hasAttribute('contfetcher_id') && elem.getAttribute('contfetcher_id')==cf_id ) {
+            return elem;
+          }
+        }
+        if( Except )
+          throw "element with given cf_id not found";
+        else
+          return undefined;
+  }
+
+
+function hashCode(str) {
+  var hash = 0, i, chr, len;
+  if (str.length === 0) return hash;
+  for (i = 0, len = str.length; i < len; i++) {
+    chr   = str.charCodeAt(i);
+    hash  = ((hash << 5) - hash) + chr;
+    hash |= 0; // Convert to 32bit integer
+  }
+  return hash;
+}
+
+function hashPage(document) {
+  var H=0,num_hrefs=0,buttonsIds=[];
+  allElems=document.getElementsByTagName('*');
+  for(let i=0;i<allElems.length;i++) {
+    let elem=allElems[i];
+    if( awayElem(elem) ) {
+      let href = elem.getAttribute('href');
+      H+=hashCode(href);
+      num_hrefs+=1;
+    }
+    else if (elem.hasAttribute('contfetcher_id')) {
+      buttonsIds.push(elem.getAttribute('contfetcher_id'));
+    }
+  }
+  buttonsIds.sort( function(a,b) {return a-b; } );
+  return [H,num_hrefs,buttonsIds];
+}
+
+function getIdActiveElements(document) {
+  let ids=[];
+  all=document.getElementsByTagName('*');
+  for(let i=0,l=all.length;i<l;i++) {
+    let elem=all[i];
+    if(elem.hasAttribute('contfetcher_id')) {
+      ids.push(elem.getAttribute('contfetcher_id'));
+    }
+  }
+  return ids;
+}
+
+
+
 function deepCompare () {
   var i, l, leftChain, rightChain;
 
@@ -218,9 +277,9 @@ function deepCompare () {
     var awayElem = function(elem) {
         //TODO протокол ( for ex. mailto:  ) не уводит со страницы.
         //Надо его добавить.
-        if(elem.tagName=='a' && elem.hasAttribute('href')) {
+        if(elem.localName=='a' && elem.hasAttribute('href')) {
           let href=elem.getAttribute('href');
-          if(href[0]=='/' || href.substring(0,5)=='http://')
+          if(href[0]=='/' || href.substring(0,7)=='http://')
             return true;
           else
             return false;
@@ -284,24 +343,10 @@ function deepCompare () {
         let newWal=parseInt(elem.getAttribute(key))+n;
         elem.setAttribute(key,newWal);
       };
-      this.getElementByCfId = function(cf_id,Except=true) {
-        let allNodes = this.document.getElementsByTagName('*');
-        let elem;
-        for(let i=0;i<allNodes.length;i++) {
-          elem=allNodes[i];
-          if( elem.hasAttribute('contfetcher_id') && elem.getAttribute('contfetcher_id')==cf_id ) {
-            return elem;
-          }
-        }
-        if( Except )
-          throw "element with given cf_id not found";
-        else
-          return undefined;
-      };
       this.pushButton = function(cf_id) {
         this.layer+=1;
         this.last_pushed_button=cf_id;
-        let activeElem=this.getElementByCfId(cf_id);
+        let activeElem=getElementByCfId(this.document,cf_id);
         let evt = this.document.createEvent("MouseEvents");
         evt.initEvent("click", true, true);
         let ajaxStor=document.getElementById('contfetcherAjaxStorage');
@@ -376,7 +421,7 @@ function deepCompare () {
         return undefined;
       };
       this.computeElemFeatures = function(elem) {
-        childs=elem.childNodes;
+        //childs=elem.childNodes;
         //TODO
         //надо сделать конвертацию DOM поддерева во что-то простое,
         //например строку или объект.
@@ -425,7 +470,7 @@ function deepCompare () {
           }
           if ( this.enabledButtonCond(elem) ) { /*this is button*/
             if(!elem.hasAttribute('contfetcher_id')) {
-              this.log('button found')
+              this.log('button found');
               let buttonId;
               let local_nl=0;
               let local_newnl=0;
@@ -436,10 +481,22 @@ function deepCompare () {
               bf.features = this.computeElemFeatures(elem);
               let existBf= this.findFeatures(bf);
               if( existBf ) {
-                this.log('\tthis old button');
+                this.log('this old button',JSON.stringify(bf.features));
                 /*эта кнопка уже встречалась ранее*/
                 let cfp  =existBf.cf_params;
                 buttonId=cfp.cf_id;
+                /*Возможно образовалась коллизия по признакам.
+                  А именно, elem имеет такие же признаки, как и какая-то
+                  другая кнопка, при этом другая кнопка существует сейчас.
+                */
+                let colliz=getElementByCfId(this.document,buttonId,false);
+                if(colliz) {
+                  console.log('semms tobe this same buttons');
+                  console.log('collision new',getXpath(this.document,elem));
+                  console.log('collision old',getXpath(this.document,colliz));
+                  continue;
+                  //throw "collision: "; //+JSON.stringify(bf);
+                }
                 local_nl=      cfp.cf_nl;
                 local_newnl=   cfp.cf_newnl;
                 local_dry=     cfp.cf_dry;
@@ -456,13 +513,6 @@ function deepCompare () {
                   cf_dry:    local_dry,
                   cf_nclick: local_nclick
                 };
-                /*Возможно образовалась коллизия по признакам.
-                  А именно, elem имеет такие же признаки, как и какая-то
-                  другая кнопка, при этом другая кнопка существует сейчас.
-                */
-                let colliz=this.getElementByCfId(buttonId,false);
-                if(colliz)
-                  throw "collision: "+JSON.stringify(bf);
                 this.buttons.push(bf);
               }
               elem.setAttribute('contfetcher_id',buttonId);
@@ -481,7 +531,7 @@ function deepCompare () {
             elem.setAttribute('contfetcher_status','disabled');
           }
         }
-        activeElem=this.getElementByCfId(cf_id,false);
+        activeElem=getElementByCfId(this.document,cf_id,false);
         if(activeElem) {
           if(newnl===0) {
             this.addInt(activeElem,'contfetcher_dry',1);
@@ -494,7 +544,7 @@ function deepCompare () {
         }
         
         if(cf_id>0) {
-          let pushedButton=undefined;
+          let pushedButton;
           for(let i=0;i<this.buttons.length;i++) {
             let button = this.buttons[i];
             if(button.cf_params.cf_id===cf_id) {
@@ -524,7 +574,7 @@ function deepCompare () {
       };
       this.log = function() {
         console.log(arguments);
-      }
+      };
       
       this.enumerateElements(0);
 }
