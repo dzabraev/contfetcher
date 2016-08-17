@@ -27,6 +27,23 @@
   }
 
 
+
+  function getButtonsDescr() {
+        let allNodes = document.getElementsByTagName('*');
+        let elem;
+        let descrs=[];
+        for(let i=0;i<allNodes.length;i++) {
+          elem=allNodes[i];
+          if( elem.hasAttribute('contfetcher_id') ) {
+              let id=elem.getAttribute('contfetcher_id');
+              let text=elem.text;
+              descrs.push([id,text]);
+          }
+        }
+        return descrs;
+  };
+
+
 function hashCode(str) {
   var hash = 0, i, chr, len;
   if (str.length === 0) return hash;
@@ -330,12 +347,12 @@ function deepCompare () {
       */
       this.cnt=1;
       this.layer=0;
-      this.document=document;
+      //this.document=document;
       this.lastActiveElems=[];
       this.hrefs=new Set();
       this.sawHrefs=new Set(); /*посмотренные гиперссылки*/
       this.last_pushed_button=0; /*id последней нажатой кнопки*/
-      this.buttons=[];
+      this.buttons=[]; // {.features={.text, .tagName} .cf_params={ .cf_id } }
       this.enabledButtonCond = function(elem) {
         return elService.hasListenersFor(elem,'click') && !awayElem(elem) && isVisible(elem);
       };
@@ -439,7 +456,7 @@ function deepCompare () {
           tagName:elem.tagName
         };
       };
-      this.enumerateElements = function(cf_id) {
+      this.enumerateElements = function(cf_id,layer) {
         let activeElem;
         if(cf_id===undefined) {
           cf_id = this.last_pushed_button;
@@ -453,10 +470,13 @@ function deepCompare () {
         let newActiveElems=[];
         let allNodes = this.document.getElementsByTagName('*');
         let elem;
+        if(layer===undefined) {
+          layer=this.layer;
+        }
         for(let i=0;i<allNodes.length;i++) {
           elem=allNodes[i];
           if( !elem.hasAttribute('contfetcher_layer') ) {
-            elem.setAttribute('contfetcher_layer',this.layer);
+            elem.setAttribute('contfetcher_layer',layer);
             elem.setAttribute('contfetcher_parId',cf_id);
           }
           if( awayElem(elem) ) {
