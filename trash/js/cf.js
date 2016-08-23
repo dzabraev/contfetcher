@@ -5,11 +5,40 @@
     
     var Cc = Components.classes;
     var Ci = Components.interfaces;
-    var document = gBrowser.contentDocument;
+    //var document = gBrowser.contentDocument;
     var elService = Components.classes["@mozilla.org/eventlistenerservice;1"].getService(Ci.nsIEventListenerService);
     var console = (Cu.import("resource://gre/modules/Console.jsm", {})).console;
     
     //var all =  document.getElementsByTagName("*");
+
+function enumDebugId() {
+  let allNodes = gBrowser.contentDocument.getElementsByTagName('*');
+  let elem;
+  let cnt=0;
+  for(let i=0;i<allNodes.length;i++) {
+    elem=allNodes[i];
+    if(elem.nodeType != 1) {
+      continue;
+    }
+    //console.log(cnt);
+    elem.setAttribute('cf_debug_id',cnt);
+    cnt+=1;
+  }
+}
+
+function getDebugId(id) {
+  let allNodes = gBrowser.contentDocument.getElementsByTagName('*');
+  let elem;
+  for(let i=0;i<allNodes.length;i++) {
+    elem=allNodes[i];
+    if(elem.nodeType != 1) {
+      continue;
+    }
+    if(elem.hasAttribute('cf_debug_id') && elem.getAttribute('cf_debug_id')==id) {
+     return elem;
+    }
+  }
+}
 
   function getElementByCfId(document,cf_id,Except=true) {
         let allNodes = document.getElementsByTagName('*');
@@ -29,19 +58,19 @@
 
 
   function getButtonsDescr() {
-        let allNodes = document.getElementsByTagName('*');
+        let allNodes = gBrowser.contentDocument.getElementsByTagName('*');
         let elem;
         let descrs=[];
         for(let i=0;i<allNodes.length;i++) {
           elem=allNodes[i];
           if( elem.hasAttribute('contfetcher_id') ) {
               let id=elem.getAttribute('contfetcher_id');
-              let text=elem.text;
+              let text=elem.textContent;
               descrs.push([id,text]);
           }
         }
         return descrs;
-  };
+  }
 
 
 function hashCode(str) {
@@ -55,17 +84,36 @@ function hashCode(str) {
   return hash;
 }
 
+function getBase(href) {
+  hrefArr=href.split('/');
+  hrefHost=hrefArr[2];
+  hrefHostArr=hrefHost.split('.');
+  hrefLen=hrefHostArr.length;
+  return [hrefHostArr[hrefLen-2],hrefHostArr[hrefLen-1]];
+}
+
+function selfHref(baseurl,href) {
+  if(href[0]=='/') {
+    return true;
+  }
+  b1=getBase(baseurl);
+  b2=getBase(href);
+  return (b1[0]===b2[0]) && (b1[1]===b2[1]) ;
+}
+
 function hashPage(document) {
   var H=0,num_hrefs=0,buttonsIds=[];
   allElems=document.getElementsByTagName('*');
   for(let i=0;i<allElems.length;i++) {
     let elem=allElems[i];
-    if( awayElem(elem) ) {
+    if( awayElem(elem) && visible(elem) ) {
       let href = elem.getAttribute('href');
+      if( !selfHref(gBrowser.contentDocument.location.origin,href) )
+        continue;
       H+=hashCode(href);
       num_hrefs+=1;
     }
-    else if (elem.hasAttribute('contfetcher_id')) {
+    else if (elem.hasAttribute('contfetcher_id') && visible(elem)) {
       buttonsIds.push(elem.getAttribute('contfetcher_id'));
     }
   }
@@ -291,6 +339,23 @@ function deepCompare () {
       return elem.offsetWidth > 0 && elem.offsetHeight > 0;
       //return elem.style.visibility == 'visible' && elem.style.display != 'none' && elem.style.opacity > 0
     };
+    
+function visible(element) {
+  if (element.offsetWidth === 0 || element.offsetHeight === 0) return false;
+  var height = gBrowser.contentDocument.documentElement.clientHeight,
+      rects = element.getClientRects(),
+      on_top = function(r) {
+        var x = (r.left + r.right)/2, y = (r.top + r.bottom)/2;
+        return gBrowser.contentDocument.elementFromPoint(x, y) === element;
+      };
+  for (var i = 0, l = rects.length; i < l; i++) {
+    var r = rects[i],
+        in_viewport = r.top > 0 ? r.top <= height : (r.bottom > 0 && r.bottom <= height);
+    if (in_viewport && on_top(r)) return true;
+  }
+  return false;
+}
+    
     var awayElem = function(elem) {
         //TODO протокол ( for ex. mailto:  ) не уводит со страницы.
         //Надо его добавить.
@@ -315,7 +380,7 @@ function deepCompare () {
     };
     
     
-    function  ContfetcherPage(document) {
+    function  ContfetcherPage(buttons) {
       /*
         Выделяем все элементы, которые:
           1) имеют на себе click callback
@@ -347,41 +412,52 @@ function deepCompare () {
       */
       this.cnt=1;
       this.layer=0;
-      //this.document=document;
+      //gBrowser.contentDocument=document;
       this.lastActiveElems=[];
       this.hrefs=new Set();
       this.sawHrefs=new Set(); /*посмотренные гиперссылки*/
       this.last_pushed_button=0; /*id последней нажатой кнопки*/
-      this.buttons=[]; // {.features={.text, .tagName} .cf_params={ .cf_id } }
+      this.buttons=[]; // {.features={.text, .tagName} .cf_params={ .cf_id } }; see computeElemFeatures
       this.enabledButtonCond = function(elem) {
-        return elService.hasListenersFor(elem,'click') && !awayElem(elem) && isVisible(elem);
+        return elService.hasListenersFor(elem,'click') && !awayElem(elem) && visible(elem);
       };
       this.addInt = function(elem,key,n) {
         let newWal=parseInt(elem.getAttribute(key))+n;
         elem.setAttribute(key,newWal);
       };
-      this.pushButton = function(cf_id) {
+      this.pushButton = function(cf_id,label) {
         this.layer+=1;
         this.last_pushed_button=cf_id;
-        let activeElem=getElementByCfId(this.document,cf_id);
-        let evt = this.document.createEvent("MouseEvents");
+        let activeElem=getElementByCfId(gBrowser.contentDocument,cf_id);
+        let evt = gBrowser.contentDocument.createEvent("MouseEvents");
         evt.initEvent("click", true, true);
-        let ajaxStor=document.getElementById('contfetcherAjaxStorage');
+        let ajaxStor=gBrowser.contentDocument.getElementById('contfetcherAjaxStorage');
         if(ajaxStor){
           ajaxStor.remove();
         }
-        ajaxStor=this.document.createElement('meta');
+        ajaxStor=gBrowser.contentDocument.createElement('meta');
         ajaxStor.id="contfetcherAjaxStorage";
         ajaxStor.setAttribute('lastid',0);
-        document.head.appendChild(ajaxStor);
+        //if(label) {
+        ajaxStor.setAttribute('label',label);
+        //}
+        gBrowser.contentDocument.head.appendChild(ajaxStor);
         activeElem.dispatchEvent(evt);
         this.addInt(activeElem,'contfetcher_nclick',1);
         return true;
       };
-      this.checkButtonPushed = function() {
-        let ajaxStor=document.getElementById('contfetcherAjaxStorage');
+      this.checkButtonPushed = function(label) {
+        let STORAGE_NOT_EXISTS=-3,
+            LABEL_NOT_MATCH=-2,
+            FINISHED=0,
+            NOT_FINISHED=-1;
+        let ajaxStor=gBrowser.contentDocument.getElementById('contfetcherAjaxStorage');
         if(!ajaxStor) {
           console.log('WARNING! function:checkButtonPush reason: element with id=contfetcherAjaxStorage not found');
+          return STORAGE_NOT_EXISTS;
+        }
+        if(ajaxStor.hasAttribute('label') && parseInt(ajaxStor.getAttribute('label'))!=label) {
+          return LABEL_NOT_MATCH;
         }
         let childs=ajaxStor.childNodes;
         let allFin=true;
@@ -392,9 +468,9 @@ function deepCompare () {
           }
         }
         if(allFin)
-          return true;
+          return FINISHED;
         else
-          return false;
+          return NOT_FINISHED;
       };
       /*
       this.getElemFeatures = function(elem) {
@@ -451,10 +527,24 @@ function deepCompare () {
         //  6. font-color
         //  7. font-size
         //  8. font-type
-        return {
-          text:elem.text,
+        let feat= {
+          text:elem.textContent,
           tagName:elem.tagName
         };
+        
+        if(elem.hasAttribute('class'))
+          feat.class=elem.getAttribute('class');
+        return feat;
+      };
+      this.setButtons = function(buttons) {
+        this.buttons=buttons;
+        let max_cf_id=0;
+        for(let i=0,l=buttons.length;i<l;i++) {
+          let cf_id = buttons[i].cf_params.cf_id;
+          if(cf_id > max_cf_id)
+            max_cf_id=cf_id;
+        }
+        this.cnt=max_cf_id+1;
       };
       this.enumerateElements = function(cf_id,layer) {
         let activeElem;
@@ -468,7 +558,7 @@ function deepCompare () {
         let nl=0;
         let newnl=0;
         let newActiveElems=[];
-        let allNodes = this.document.getElementsByTagName('*');
+        let allNodes = gBrowser.contentDocument.getElementsByTagName('*');
         let elem;
         if(layer===undefined) {
           layer=this.layer;
@@ -502,6 +592,7 @@ function deepCompare () {
               let existBf= this.findFeatures(bf);
               if( existBf ) {
                 this.log('this old button',JSON.stringify(bf.features));
+                this.log('this old button__',bf.features.text,bf.features.tagName);
                 /*эта кнопка уже встречалась ранее*/
                 let cfp  =existBf.cf_params;
                 buttonId=cfp.cf_id;
@@ -509,11 +600,11 @@ function deepCompare () {
                   А именно, elem имеет такие же признаки, как и какая-то
                   другая кнопка, при этом другая кнопка существует сейчас.
                 */
-                let colliz=getElementByCfId(this.document,buttonId,false);
+                let colliz=getElementByCfId(gBrowser.contentDocument,buttonId,false);
                 if(colliz) {
                   console.log('semms tobe this same buttons');
-                  console.log('collision new',getXpath(this.document,elem));
-                  console.log('collision old',getXpath(this.document,colliz));
+                  console.log('collision new',getXpath(gBrowser.contentDocument,elem));
+                  console.log('collision old',getXpath(gBrowser.contentDocument,colliz));
                   continue;
                   //throw "collision: "; //+JSON.stringify(bf);
                 }
@@ -551,7 +642,7 @@ function deepCompare () {
             elem.setAttribute('contfetcher_status','disabled');
           }
         }
-        activeElem=getElementByCfId(this.document,cf_id,false);
+        activeElem=getElementByCfId(gBrowser.contentDocument,cf_id,false);
         if(activeElem) {
           if(newnl===0) {
             this.addInt(activeElem,'contfetcher_dry',1);
@@ -581,8 +672,8 @@ function deepCompare () {
           else {
             pushedButton.cf_params.cf_dry=0;
           }
-          pushedButton.nl+=nl;
-          pushedButton.newnl+=newnl;
+          //pushedButton.nl+=nl;
+          //pushedButton.newnl+=newnl;
         }
         if(newActiveElems.length>0) {
           this.lastActiveElems=newActiveElems;
@@ -595,7 +686,8 @@ function deepCompare () {
       this.log = function() {
         console.log(arguments);
       };
-      
+      if(buttons)
+        this.setButtons(buttons);
       this.enumerateElements(0);
 }
 

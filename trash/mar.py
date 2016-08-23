@@ -1,5 +1,6 @@
 #!/usr/bin/python
 
+
 import marionette
 import time
 import sys
@@ -11,14 +12,22 @@ import re
 import os
 import time
 import traceback
+import json
 
-
+PATH_IRRELEVANT=-1
 PUSH_BUTTON_AWAY=-1
 PUSH_BUTTON_OK=0
 SUIT_BUTTON_NOT_EXISTS=-1
 GRAPH_IRRELEVANT=-2
 TRAVERSE_OK=0
+NOT_FOUND=-1
+SUCCESS=0
 
+STORAGE_NOT_EXISTS=-3
+LABEL_NOT_MATCH=-2
+FINISHED=0
+NOT_FINISHED=-1
+ALL_BUTTONS_PUSHED=0
 
 def log(msg,**kwargs):
   f=sys.stdout
@@ -29,6 +38,7 @@ def log(msg,**kwargs):
     f=open(fname,'a')
     needClose=True
   f.write(msg)
+  f.flush()
   if needClose:
     f.close()
 
@@ -48,24 +58,57 @@ def bfSearch(G,rootIdx,f):
         queue.append( (b,path+[bid]) )
   return (-1,[])
 
-def get_bid(node,bad_bids):
+def get_bid(node,bad_bids,**kwargs):
+  lpb=kwargs.get('lpb')
+  if lpb!=None:
+    if lpb in node['ids']:
+      return lpb
   for bid in node['ids']:
     if bid not in bad_bids:
       return bid
   return SUIT_BUTTON_NOT_EXISTS
 
 
-def printGraph(G,fname='/tmp/graph',**kwargs):
+def printArray(buttons):
+  bts=''
+  bts+='['
+  l=len(buttons)
+  for i in range(l):
+    bts+=str(buttons[i])
+    if i<l-1:
+      bts+=','
+      if i%10==0 and i!=0:
+        bts+='\\n'
+  bts+=']'
+  return bts
+
+
+def printGraph(G,fname='graph',**kwargs):
   with open(fname+'.dot','wb') as f:
     f.write('digraph buttonsTree {\n')
     for a in G.nodes():
-      h=G.node[a]['h']
-      label="id={idx}\\nhashPage={hashPage}\\nnhref={nhref}\\nbuttons={buttons}".format(
-        idx=a,
-        hashPage=h[0],
-        nhref=h[1],
-        buttons=h[2]
-      )
+      node=G.node[a]
+      h=node['h']
+      buttons=h[2]
+      if 'awayButtons' in node:
+        awayButtons=node['awayButtons']
+        bts=printArray( arr_sub(buttons,awayButtons) )
+        awayButtons=printArray( awayButtons )
+        label="id={idx}\\nhashPage={hashPage}\\nnhref={nhref}\\nbuttons={buttons}\\nawayButtons={awayButtons}".format(
+          idx=a,
+          hashPage=h[0],
+          nhref=h[1],
+          buttons=bts,
+          awayButtons=awayButtons
+        )
+      else:
+        bts=printArray(buttons)
+        label="id={idx}\\nhashPage={hashPage}\\nnhref={nhref}\\nbuttons={buttons}".format(
+          idx=a,
+          hashPage=h[0],
+          nhref=h[1],
+          buttons=bts
+        )
       label=re.sub('\[','\[',label)
       label=re.sub('\]','\]',label)
       f.write('{node} [label="{label}"];\n'.format(node=a,label=label))
@@ -77,14 +120,27 @@ def printGraph(G,fname='/tmp/graph',**kwargs):
       f.write('{a} -> {b} [label="{label}"];\n'.format(a=a,b=b,label=label) )
     
     #write legend
-    if 'buttons' in kwargs:
+    if 'buttons' in kwargs and len(kwargs['buttons']):
       buttons=kwargs['buttons']
+      #buttons.sort(lambda x,y: x[0]-y[0])
       f.write('  { rank = sink;\n')
       f.write('    Legend [shape=none, margin=0, label=<\n')
       f.write('    <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">\n')
-      for bid in buttons:
-        text=buttons[bid]
-        line=u'      <TR><TD>{bid}</TD><TD>"{text}"</TD></TR>\n'.format(bid=bid,text=text)
+      k=buttons.keys()
+      k.sort( lambda x,y: int(x)-int(y) )
+      for bid in k:
+        B=buttons[bid]
+        if 'img' in B:
+          basedir='/tmp/cf-graph'
+          if not os.path.exists(basedir):
+            os.makedirs(basedir)
+          filename='{}/button-{}.png'.format(basedir,bid)
+          fimg=open(filename,'wb')
+          fimg.write(B['img'])
+          fimg.close()
+          line=u'      <TR><TD>{bid}</TD><TD><IMG src="{filename}" SCALE="False" /></TD></TR>\n'.format(bid=bid,filename=filename)
+        else:
+          line=u'      <TR><TD>{bid}</TD><TD>"{text}"</TD></TR>\n'.format(bid=bid,text=B['text'])
         f.write(line.encode("UTF-8"))
       f.write('  </TABLE>\n')
       f.write('  >]\n')
@@ -112,28 +168,50 @@ def cleanSubgraph(G,rootIdx,nodeIdx):
     if G.node[idx]['mark']==False:
       G.remove_node(idx)
 
-  
+
+
+def arr_sub(A,B):
+  #A/B
+  return [a for a in A if a not in B]
   
 
 
 class ButtonsGraph:
-  def __init__(self,pageUrl):
+  def __init__(self,startPageUrl):
     client = marionette.Marionette(host='localhost', port=2829)
     client.start_session()
-    self.lastPushedButtonId=0
+    self.lastPushedButtonId=None
     self.G=nx.DiGraph()
     self.nodeCnt=0
     self.rootIdx=1
     self.client=client
     self.currentNode=None
     self.buttonsDescr={} #tuples (buttonId,text)
-    self.loadPage()
+    self.loadPage(url=startPageUrl)
     self.pageUrl=self.getCurLoc()
     self.away_buttons=[]
+    self.label=0
+    #import function into two contexts
+    #client.set_context(client.CONTEXT_CONTENT)
+    #client.import_script('js/cf.js')
     client.set_context(client.CONTEXT_CHROME)
     client.import_script('js/cf.js')
     #if client.execute_script('return gBrowser.cfPage===undefined;'):
-    res=client.execute_script('window.cfPage= new ContfetcherPage(gBrowser.contentDocument);')
+    cacheDir='.cache'
+    siteCatalog=self.makeShortName(self.pageUrl)
+    siteDir='{}/{}'.format(cacheDir,siteCatalog)
+    buttonsFname='{}/buttons_{}.json'.format(siteDir,re.sub('[:./]','_',self.pageUrl))
+    if os.path.exists(buttonsFname):
+      with open(buttonsFname,'r') as f:
+        buttons_json=f.read()
+        client.execute_script(u"window.cfPage = new ContfetcherPage(JSON.parse('{}'));".format(
+          buttons_json.decode('utf8').replace('\n','')))
+        BS=json.loads(buttons_json)
+        for b in BS:
+          if b['away']:
+            self.away_buttons.append(  b['cf_params']['cf_id']  )
+    else:
+      res=client.execute_script("window.cfPage = new ContfetcherPage();")
     self.addNode(0)
   def updateButtonsDescr(self):
     buttonsDescr=self.buttonsDescr
@@ -143,7 +221,19 @@ class ButtonsGraph:
       bid=d[0]
       text=d[1]
       if bid not in buttonsDescr:
-        buttonsDescr[bid]=text
+        if len(text)>0:
+          buttonsDescr[bid]={'text':text}
+        else:
+          #
+          #print 'BID=',bid
+          elemXpath=client.execute_script('\
+            return getXpathSimple(gBrowser.contentDocument,getElementByCfId(gBrowser.contentDocument,{}))'.format(bid))
+          client.set_context('content')
+          elem=client.find_element('xpath',elemXpath)
+          assert elem!=None
+          img=client.screenshot(elem,format='binary')
+          client.set_context('chrome')
+          buttonsDescr[bid]={'img':img}
   def loadPage(self,**kwargs):
     url=kwargs.get('url')
     ntry_ajax=kwargs.get('ntry_ajax',1000)
@@ -173,75 +263,130 @@ class ButtonsGraph:
     self.client.set_context(self.client.CONTEXT_CHROME)
     hashPage=self.client.execute_script('return hashPage(gBrowser.contentDocument);')
     hashPage[2]=[int(h) for h in hashPage[2]]
+    hashPage[2].sort()
     return hashPage
+  def getNodeByHash(self,hval):
+    G=self.G
+    for idx in G.nodes():
+      node=G.node[idx]
+      if node['h']==hval:
+        return idx
+    return NOT_FOUND
   def addNode(self,buttonId):
     G=self.G
     hashPage=self.evalHashPage()
+    log('hashPage={}\n'.format(hashPage))
     self.updateButtonsDescr()
     idxs=self.G.nodes()
     for idx in idxs:
       #print self.G.node[idx]
-      if self.G.node[idx]['h']==hashPage:
+      if 'h' in  self.G.node[idx] and self.G.node[idx]['h']==hashPage:
         if G.has_edge(self.currentNode,idx):
           G[self.currentNode][idx]['buttonId'].append(buttonId)
         else:
           self.G.add_edge(self.currentNode,idx,buttonId=[buttonId])
-          self.currentNode=idx
-        print 'new context equal old context(nodeIdx={} buttonId={})'.format(idx,buttonId)
+        self.currentNode=idx
+        log('new context equal old context(nodeIdx={} buttonId={})\n'.format(idx,buttonId))
         return
-    ids=self.client.execute_script('return getIdActiveElements(gBrowser.contentDocument);')#TODO this exists in hashPage
+    #ids=self.client.execute_script('return getIdActiveElements(gBrowser.contentDocument);')#TODO this exists in hashPage
+    ids=hashPage[2]
     ids=[int(b) for b in ids]
-    print ids
-    self.G.add_node(self.nodeCnt+1,h=hashPage,ids=ids,parButtonId=buttonId)
-    if(self.nodeCnt>0):
-      self.G.add_edge(self.nodeCnt,self.nodeCnt+1,buttonId=[buttonId])
+    log('new buttons: {}\n'.format(ids))
+    newNodeId=self.nodeCnt+1
     self.nodeCnt+=1
-    self.currentNode=self.nodeCnt
+    self.G.add_node(newNodeId,h=hashPage,ids=ids,parButtonId=buttonId)
+    if(self.currentNode>0):
+      self.G.add_edge(self.currentNode,newNodeId,buttonId=[buttonId])
+    self.currentNode=newNodeId
     print 'added new node id={} buttonId={}'.format(self.nodeCnt,buttonId)
   def gotoRoot(self):
     G=self.G
     client=self.client
     self.loadPage(url=self.pageUrl)
+    client.set_context('chrome')
+    log('reenumerating root\n')
+    client.execute_script('window.cfPage.enumerateElements(0,0);')
     h1=G.node[self.rootIdx]['h']
     h2=self.evalHashPage()
     if h1 != h2:
       #graph unactual
-      log('can\'t goto root node, GRAPH_IRRELEVANT\nh_old={}\nh_new={}\n'.format(h1,h2))
-      return GRAPH_IRRELEVANT
+      log('GRAPH_IRRELEVANT\nh_old={}\nh_new={}\n'.format(h1,h2))
     else:
       log('success goto root\n')
     self.currentNode=self.rootIdx
-    client.set_context('chrome')
-    client.execute_script('window.cfPage.enumerateElements(0,0);')
+    self.updateNode(self.rootIdx,h2)
+  def updateNode(self,nodeIdx,new_h):
+    G=self.G
+    node=G.node[nodeIdx]
+    old_h=node['h']
+    old_unpushed=node['ids']
+    old_all=old_h[2]
+    old_pushed=arr_sub(old_all,old_unpushed)
+    new_all=new_h[2]
+    new_unpushed=arr_sub(new_all,old_pushed)
+    node['ids']=new_unpushed
+    node['h']=new_h
+    drop_ids=arr_sub(old_all,new_all)
+    for a,b in G.edges(nodeIdx):
+      pushed=G[a][b]['buttonId']
+      pushed2=arr_sub(pushed,drop_ids)
+      if len(pushed2)==0:
+        G.remove_edge(a,b)
+      else:
+        G[a][b]['buttonId']=pushed2
+
   def followPath(self,path):
     ''' return:
-       0: successfully goto path
-      -1: path not is nonactual
-      -2: whole graph non actual
+      SUCCESS: successfully goto path
+      PATH_IRRELEVANT: incorrect path
     '''
     G=self.G
     client = self.client
-    if self.gotoRoot()==GRAPH_IRRELEVANT:
-      return GRAPH_IRRELEVANT
+    self.gotoRoot()
     for bId in path:
-      self.pushButtonOnly(bId)
+      parent=self.currentNode
+      bts=G.node[self.currentNode]['h'][2]
+      if bId not in bts:
+        return PATH_IRRELEVANT
       found=False
       for a,b in G.edges(self.currentNode):
         if bId in G[a][b]['buttonId']:
           self.currentNode=b
           found=True
           break
-      if not Found:
+      if not found:
         log('followPath: edge with {bId} not found, currentNode={idx}'.format(bId=bId,idx=idx))
         raise Exception
-      h=self.client.execute_script('return hashPage(gBrowser.contentDocument);')
-      tmph=G.node[tmpNodeIdx]
-      if h!=tmph:
-        #subgraph is nonactual
-        cleanSubgraph(G,self.rootIdx,self.currentNode)
-        return -1
-    return 0
-
+      curIdx=self.currentNode
+      node=G.node[curIdx]
+      self.pushButtonOnly(bId)
+      h_old=node['h']
+      h_new=self.evalHashPage()
+      if h_new!=h_old:
+        log('node={} irrelevant\n'.format(self.currentNode))
+        log('h_new={}\nh_old={}\n'.format(h_new,h_old))
+        idx=self.getNodeByHash(h_new)
+        if idx==NOT_FOUND:
+          #replace node with hash=h_old
+          log('replace existing node, nodeId={}'.format(curIdx))
+          self.updateNode(curIdx,h_new)
+        else:
+          #exists node with hash=h_new
+          #1. remove edge parent--->node_with_h_old
+          #2. add edge parent--->node_with_h_new
+          self.addNode(bId)
+          arr=G[parent][curIdx]['buttonId']
+          arr=arr_sub(arr,[bId])
+          if len(arr)==0:
+            G.remove_edge(parent,curIdx)
+          if G.has_edge(parent,idx):
+            if bId not in G[parent][idx]['buttonId']:
+              G[parent][idx]['buttonId'].append(bId)
+          else:
+            G.add_edge(parent,idx,buttonId=[idx])
+          #self.currentNode=idx
+        #cleanSubgraph(G,self.rootIdx,self.currentNode)
+    return SUCCESS
   def getButtonId(self):
     G=self.G
     client=self.client
@@ -249,8 +394,8 @@ class ButtonsGraph:
     fo_ret=-1
     idx=self.currentNode
     cNode=G.node[idx]
-    if len(cNode['ids'])>0:
-      bid=cNode['ids'][0]
+    bid=get_bid(cNode,self.away_buttons,lpb=self.lastPushedButtonId)
+    if bid!=-1:
       log('exist unpushed button({bid}) in current node({cnode})\n'.format(bid=bid,cnode=idx))
       return bid
     while fo_ret==-1:
@@ -265,15 +410,15 @@ class ButtonsGraph:
         fo_ret=self.followPath(path)
         if fo_ret==0:
           #successfullt goto throw path
-          log('success following throw path')
-          return get_bid( G.node[self.currentNode], self.away_buttons )
+          log('success following throw path\n')
+          return get_bid( G.node[self.currentNode], self.away_buttons, lpb=self.lastPushedButtonId)
         elif fo_ret==-2:
-          log('whole graph unactual')
+          log('whole graph irrelevant\n')
           return -2
         else:
           #can't goto throw path; Seems tobe the path of graph
           #is nonactual. Try again.
-          log('try again follow path')
+          log('try again follow path\n')
           continue
     return -1 # Node with unpushed button not found
   def getCurLoc(self):
@@ -282,22 +427,45 @@ class ButtonsGraph:
     href=client.execute_script('return window.location.href;')
     client.set_context("chrome")
     return href
-  def pushButtonOnly(self,cf_id):
+  def pushButtonOnly(self,cf_id,layer=None,**kwargs):
     client=self.client
     href=self.pageUrl
-    res=client.execute_script('return window.cfPage.pushButton({});'.format(cf_id))
+    label=self.label
+    G=self.G
+    delay =kwargs.get('delay',1)
+    sdelay=kwargs.get('sdelay',5)
+    ntry=kwargs.get('ntry',1)
+    self.label+=1
+    self.lastPushedButtonId=cf_id
+    log('push cf_id={} node_id={} .'.format(cf_id,self.currentNode))
+    res=client.execute_script('return window.cfPage.pushButton({},{});'.format(cf_id,label))
+    time.sleep(sdelay)
     while True:
+      log('.')
       href1=self.getCurLoc()
       if href != href1:
         #away from page
-        log('detect away from page, cf_id={}\n'.format(cf_id))
+        log('detect away from page, cf_id={}\n{h1} ---> {h2}\n'.format(cf_id,h1=href,h2=href1))
+        self.away_buttons.append(cf_id)
+        awayNode=G.node[self.currentNode]
+        if 'awayButtons' in awayNode:
+          awayNode['awayButtons'].append(cf_id)
+        else:
+          awayNode['awayButtons']=[cf_id]
         return PUSH_BUTTON_AWAY
-      print 'check push button'
-      res=client.execute_script('return window.cfPage.checkButtonPushed();')
-      if res:
-        print 'PUSH(id={}): ok'.format(cf_id)
-        client.execute_script('window.cfPage.enumerateElements(); return 1;')
+      res=client.execute_script('return window.cfPage.checkButtonPushed({});'.format(label))
+      if res==FINISHED:
+        log(' ok\n'.format(cf_id))
+        if layer:
+          client.execute_script('window.cfPage.enumerateElements({},{});'.format(cf_id,layer))
+        else:
+          client.execute_script('window.cfPage.enumerateElements({});'.format(cf_id))
         break
+      elif res==STORAGE_NOT_EXISTS or res==LABEL_NOT_MATCH:
+        log('detect away from page, cf_id={}\n'.format(cf_id))
+        self.away_buttons.append(cf_id)
+        return PUSH_BUTTON_AWAY
+      time.sleep(delay)
     return PUSH_BUTTON_OK
   def pushButton(self,cf_id=None):
     client=self.client
@@ -314,8 +482,8 @@ class ButtonsGraph:
     if res==PUSH_BUTTON_AWAY:
       if self.gotoRoot()==GRAPH_IRRELEVANT:
         return GRAPH_IRRELEVANT
-      self.away_buttons.append(cf_id)
-    self.addNode(cf_id)
+    else:
+      self.addNode(cf_id)
     return PUSH_BUTTON_OK
   def printGraph(self,**kwargs):
     printGraph(self.G,buttons=self.buttonsDescr,**kwargs)
@@ -324,26 +492,59 @@ class ButtonsGraph:
     try:
       for _ in range(100):
         bid=self.getButtonId()
-        res=self.pushButton(bid)
-        if res==GRAPH_IRRELEVANT:
+        if bid in self.away_buttons:
+          log('getButtonId return bid={}, and bid in away_buttons\n'.format(bid))
+          raise Exception
+        if bid==GRAPH_IRRELEVANT:
           return GRAPH_IRRELEVANT
+        elif bid==NOT_FOUND:
+          return TRAVERSE_OK
+        res=self.pushButton(bid)
     except Exception as ex:
-      log('traverse failed, produce {fname}'.format(fname=fname) )
+      log('traverse failed, produce {fname}\n'.format(fname=fname) )
       traceback.print_exc()
       self.printGraph(fname=fname)
+      self.saveButtons()
     return TRAVERSE_OK
+  def makeShortName(self,url):
+    arr=url.split('/')
+    s=arr[2].split('.')
+    shortName='{}_{}'.format(s[-2],s[-1])
+    return shortName
+  def saveButtons(self):
+    client=self.client
+    cacheDir='.cache'
+    siteCatalog=self.makeShortName(self.pageUrl)
+    siteDir='{}/{}'.format(cacheDir,siteCatalog)
+    buttonsFname='{}/buttons_{}.json'.format(siteDir,re.sub('[:./]','_',self.pageUrl))
+    new_buttons=client.execute_script('return window.cfPage.buttons;')
+    for b in new_buttons:
+      cf_id=b['cf_params']['cf_id']
+      if cf_id in self.away_buttons:
+        b['away']=True
+      else:
+        b['away']=False
+    new_buttons_json=json.dumps(new_buttons, ensure_ascii=False, indent=4).encode('utf8')
+    if not os.path.exists(siteDir):
+      os.makedirs(siteDir)
+    with open(buttonsFname,'wb') as fButtons:
+      fButtons.write(new_buttons_json)
+    log('save buttons to {}\n'.format(buttonsFname))
 
 
 def action2():
   #client.execute_script('jQuery.ajax=function() {window.alert(\'test\');}')
-  g=ButtonsGraph('http://www.mk.ru/news')
-  for i in range(3):
+  g=ButtonsGraph('http://www.mk.ru/news/')
+  for i in range(1):
     log('traverse attempt {}\n'.format(i))
     res=g.traversePage()
     if res==TRAVERSE_OK:
       log('TRAVERSE_OK\n')
+      g.printGraph()
+      g.saveButtons()
       break
-  g.printGraph()
+    g.printGraph()
+    g.saveButtons()
   #g.pushButton(5)
   #g.pushButton(10)
   #g.pushButton(4)
