@@ -4,3 +4,15 @@ done 3. в getButtonsDescr брать текст рекурсивно из но�
 4. подкрашивать ноду, на которой все свалилось.
 5. сохранять away buttons для повторного использования
 6. в легенду графа добавлять картинки, если кнопка не содержит текст
+
+
+7. добавляются away hrefs, которые не должны добавляться
+Traceback (most recent call last):
+  File "./mar.py", line 706, in <module>
+    action2()
+  File "./mar.py", line 686, in action2
+    res=g.traversePage()
+  File "./mar.py", line 555, in traversePage
+    self.saveHrefs()
+  File "./mar.py", line 647, in saveHrefs
+    f.write(u'{}'.format(href))

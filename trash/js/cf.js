@@ -3,16 +3,131 @@
 /*jslint plusplus: true */
 /*jshint esversion: 6 */
     
+//
+// let global = node.ownerGlobal.wrappedJSObject
+// Похоже, что это context content
+
     var Cc = Components.classes;
     var Ci = Components.interfaces;
     //var document = gBrowser.contentDocument;
     var elService = Components.classes["@mozilla.org/eventlistenerservice;1"].getService(Ci.nsIEventListenerService);
     var console = (Cu.import("resource://gre/modules/Console.jsm", {})).console;
+    let { require } = Cu.import("resource://devtools/shared/Loader.jsm", {});
+    //let inspector = require("devtools/server/actors/inspector");
+    const {EventParsers} = require("devtools/shared/event-parsers");
     
     //var all =  document.getElementsByTagName("*");
 
-function enumDebugId() {
-  let allNodes = gBrowser.contentDocument.getElementsByTagName('*');
+function relPathToAbs (sRelPath) {
+  /*https://developer.mozilla.org/en-US/docs/Web/API/document/cookie#Using_relative_URLs_in_the_path_parameter*/
+  var nUpLn, sDir = gBrowser.contentDocument.location.origin, 
+      sPath = gBrowser.contentDocument.
+          location.pathname.replace(/[^\/]*$/, sRelPath.replace(/(\/|^)(?:\.?\/+)+/g, "$1"));
+  for (var nEnd, nStart = 0; nEnd = sPath.indexOf("/../", nStart), nEnd > -1; nStart = nEnd + nUpLn) {
+    nUpLn = /^\/(?:\.\.\/)*/.exec(sPath.slice(nEnd))[0].length;
+    sDir = (sDir + sPath.substring(nStart, nEnd)).replace(new RegExp("(?:\\\/+[^\\\/]*){0," + ((nUpLn - 1) / 3) + "}$"), "/");
+  }
+  return sDir + sPath.substr(nStart);
+}
+
+function makeAbsPath(path) {
+  if(path[0]=='/' || path[0]=='#' || path[0]=='.' || path[0]=='?')
+    return relPathToAbs(path);
+  else
+    return path;
+}
+
+function getSelfHrefs(type,docum,layer) {
+  let baseurl;
+  if(!docum) {
+    if(gBrowser && gBrowser.contentDocument)
+      docum=gBrowser.contentDocument;
+    else {
+      docum=document;
+    }
+  }
+
+  if(!docum)
+    throw "document is undefined";
+  baseurl=docum.location.origin;
+  let hrefs=[],
+      predicate;
+  if(type=="all")
+    predicate = elem=>{ 
+      return elem.hasAttribute('href') && selfHref(baseurl,elem.getAttribute('href'));
+    };
+  else if( type=="allVisible" )
+    predicate = elem=>{ 
+      return elem.hasAttribute('href') && selfHref(baseurl,elem.getAttribute('href')) &&
+      visible(elem)
+    };
+  else if(type=="layer") {
+    predicate = elem=>{
+      return elem.hasAttribute('href') && selfHref(baseurl,elem.getAttribute('href')) &&
+      elem.hasAttribute('contfetcher_layer') &&
+      elem.getAttribute('contfetcher_layer')==layer
+    };
+  }
+  else if(type=="layerVisible") {
+    predicate = elem=>{ 
+      return elem.hasAttribute('href') && selfHref(baseurl,elem.getAttribute('href')) &&
+      visible(elem) &&
+      elem.hasAttribute('contfetcher_layer') &&
+      elem.getAttribute('contfetcher_layer')==layer
+    };
+  }
+  else {
+    throw "bad arg \"type\", type="+type;
+  }
+
+
+  let allElems=docum.getElementsByTagName('a'), href;
+  for(let i=0,l=allElems.length;i<l;i++) {
+    let elem=allElems[i];
+    if( predicate(elem) ) {
+      href=makeAbsPath(elem.getAttribute('href'));
+      hrefs.push(href);
+    }
+  }
+  
+  return hrefs;
+}
+
+function hasEventListeners(node,type) {
+    let parsers = new EventParsers().parsers;
+    for (let [,{getListeners}] of parsers) {
+      try {
+        let infos = getListeners(node);
+        for(let i=0,l=infos.length;i<l;i++) {
+          if(infos[i].type==type) {
+            return true;
+          }
+        }
+      } catch(e) {
+        // An object attached to the node looked like a listener but wasn't...
+        // do nothing.
+      }
+    }
+    return false;
+}
+
+
+function getEventListeners(node) {
+    let parsers = new EventParsers().parsers,
+        info=[];
+    for (let [,{getListeners}] of parsers) {
+      info.push(getListeners(node));
+    }
+    return info;
+}
+
+
+
+
+function enumDebugId(document) {
+  if(!document)
+    document=gBrowser.contentDocument
+  let allNodes = document.getElementsByTagName('*');
   let elem;
   let cnt=0;
   for(let i=0;i<allNodes.length;i++) {
@@ -26,8 +141,10 @@ function enumDebugId() {
   }
 }
 
-function getDebugId(id) {
-  let allNodes = gBrowser.contentDocument.getElementsByTagName('*');
+function getDebugId(id,document) {
+  if(!document)
+    document=gBrowser.contentDocument
+  let allNodes = document.getElementsByTagName('*');
   let elem;
   for(let i=0;i<allNodes.length;i++) {
     elem=allNodes[i];
@@ -96,6 +213,10 @@ function selfHref(baseurl,href) {
   if(href[0]=='/') {
     return true;
   }
+  if(href[0]=='#')
+    return false;
+  if(!href.match(/https?:\/\/.+/))
+    return false; 
   b1=getBase(baseurl);
   b2=getBase(href);
   return (b1[0]===b2[0]) && (b1[1]===b2[1]) ;
@@ -106,6 +227,8 @@ function hashPage(document) {
   allElems=document.getElementsByTagName('*');
   for(let i=0;i<allElems.length;i++) {
     let elem=allElems[i];
+    if(elem.nodeType != 1)
+      continue;
     if( awayElem(elem) && visible(elem) ) {
       let href = elem.getAttribute('href');
       if( !selfHref(gBrowser.contentDocument.location.origin,href) )
@@ -340,21 +463,44 @@ function deepCompare () {
       //return elem.style.visibility == 'visible' && elem.style.display != 'none' && elem.style.opacity > 0
     };
     
+
+function on_top(r,element) {
+  let x = (r.left + r.right)/2, y = (r.top + r.bottom)/2;
+  return gBrowser.contentDocument.elementFromPoint(x, y) === element;
+}
+
 function visible(element) {
-  if (element.offsetWidth === 0 || element.offsetHeight === 0) return false;
-  var height = gBrowser.contentDocument.documentElement.clientHeight,
-      rects = element.getClientRects(),
-      on_top = function(r) {
-        var x = (r.left + r.right)/2, y = (r.top + r.bottom)/2;
-        return gBrowser.contentDocument.elementFromPoint(x, y) === element;
-      };
+  var de=gBrowser.contentDocument.documentElement;
+  if (!element || element.nodeType!=1)
+    return false;
+  if (element.offsetWidth === 0 || element.offsetHeight === 0)
+    return false;
+  //var height = gBrowser.contentDocument.documentElement.clientHeight,
+  let rects = element.getClientRects();
+  if (rects.length==0)
+    return false;
+  r=rects[0];
+  //goto first rect
+  let x1=de.scrollLeft, y1=de.scrollTop;
+  let x = (r.left + r.right)/2 + x1, y = (r.top + r.bottom)/2 + y1;
+  de.scrollTo(x,y);
+  rects = element.getClientRects(); /*update rect's coordinates*/
   for (var i = 0, l = rects.length; i < l; i++) {
-    var r = rects[i],
-        in_viewport = r.top > 0 ? r.top <= height : (r.bottom > 0 && r.bottom <= height);
-    if (in_viewport && on_top(r)) return true;
+    var r = rects[i];
+    if (on_top(r,element)) 
+      return true;
+  }
+  childs=element.childNodes;
+  for(let i=0,l=childs.length;i<l;i++) {
+    if(visible(childs[i]))
+      return true;
   }
   return false;
 }
+
+
+
+
     
     var awayElem = function(elem) {
         //TODO протокол ( for ex. mailto:  ) не уводит со страницы.
@@ -419,7 +565,7 @@ function visible(element) {
       this.last_pushed_button=0; /*id последней нажатой кнопки*/
       this.buttons=[]; // {.features={.text, .tagName} .cf_params={ .cf_id } }; see computeElemFeatures
       this.enabledButtonCond = function(elem) {
-        return elService.hasListenersFor(elem,'click') && !awayElem(elem) && visible(elem);
+        return elem.nodeType==1 && hasEventListeners(elem,'click') && !awayElem(elem) && visible(elem);
       };
       this.addInt = function(elem,key,n) {
         let newWal=parseInt(elem.getAttribute(key))+n;
