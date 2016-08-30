@@ -8,7 +8,7 @@
         }, 
         "cf_params": {
             "cf_nl": 0, 
-            "cf_dry": 57, 
+            "cf_dry": 99, 
             "cf_id": 1, 
             "cf_newnl": 0, 
             "cf_nclick": 0
@@ -36,7 +36,7 @@
         }, 
         "cf_params": {
             "cf_nl": 0, 
-            "cf_dry": 4, 
+            "cf_dry": 10, 
             "cf_id": 3, 
             "cf_newnl": 0, 
             "cf_nclick": 0
@@ -51,7 +51,7 @@
         }, 
         "cf_params": {
             "cf_nl": 0, 
-            "cf_dry": 9, 
+            "cf_dry": 20, 
             "cf_id": 4, 
             "cf_newnl": 0, 
             "cf_nclick": 0
@@ -66,7 +66,7 @@
         }, 
         "cf_params": {
             "cf_nl": 0, 
-            "cf_dry": 8, 
+            "cf_dry": 6, 
             "cf_id": 5, 
             "cf_newnl": 0, 
             "cf_nclick": 0
@@ -81,7 +81,7 @@
         }, 
         "cf_params": {
             "cf_nl": 0, 
-            "cf_dry": 4, 
+            "cf_dry": 21, 
             "cf_id": 6, 
             "cf_newnl": 0, 
             "cf_nclick": 0
@@ -860,7 +860,7 @@
         }, 
         "cf_params": {
             "cf_nl": 0, 
-            "cf_dry": 2, 
+            "cf_dry": 8, 
             "cf_id": 58, 
             "cf_newnl": 0, 
             "cf_nclick": 0
@@ -875,7 +875,7 @@
         }, 
         "cf_params": {
             "cf_nl": 0, 
-            "cf_dry": 2, 
+            "cf_dry": 8, 
             "cf_id": 59, 
             "cf_newnl": 0, 
             "cf_nclick": 0
@@ -890,7 +890,7 @@
         }, 
         "cf_params": {
             "cf_nl": 0, 
-            "cf_dry": 2, 
+            "cf_dry": 6, 
             "cf_id": 60, 
             "cf_newnl": 0, 
             "cf_nclick": 0
@@ -905,7 +905,7 @@
         }, 
         "cf_params": {
             "cf_nl": 0, 
-            "cf_dry": 2, 
+            "cf_dry": 6, 
             "cf_id": 61, 
             "cf_newnl": 0, 
             "cf_nclick": 0
@@ -920,7 +920,7 @@
         }, 
         "cf_params": {
             "cf_nl": 0, 
-            "cf_dry": 2, 
+            "cf_dry": 6, 
             "cf_id": 62, 
             "cf_newnl": 0, 
             "cf_nclick": 0
@@ -934,7 +934,7 @@
         }, 
         "cf_params": {
             "cf_nl": 0, 
-            "cf_dry": 0, 
+            "cf_dry": 1, 
             "cf_id": 63, 
             "cf_newnl": 0, 
             "cf_nclick": 0
@@ -948,8 +948,308 @@
         }, 
         "cf_params": {
             "cf_nl": 0, 
-            "cf_dry": 0, 
+            "cf_dry": 1, 
             "cf_id": 64, 
+            "cf_newnl": 0, 
+            "cf_nclick": 0
+        }
+    }, 
+    {
+        "away": true, 
+        "features": {
+            "text": "Москва", 
+            "class": "reg-item", 
+            "tagName": "SPAN"
+        }, 
+        "cf_params": {
+            "cf_nl": 0, 
+            "cf_dry": 0, 
+            "cf_id": 65, 
+            "cf_newnl": 0, 
+            "cf_nclick": 0
+        }
+    }, 
+    {
+        "away": true, 
+        "features": {
+            "text": "Санкт-Петербург", 
+            "class": "reg-item", 
+            "tagName": "SPAN"
+        }, 
+        "cf_params": {
+            "cf_nl": 0, 
+            "cf_dry": 0, 
+            "cf_id": 66, 
+            "cf_newnl": 0, 
+            "cf_nclick": 0
+        }
+    }, 
+    {
+        "away": true, 
+        "features": {
+            "text": "Австралия", 
+            "class": "reg-item", 
+            "tagName": "SPAN"
+        }, 
+        "cf_params": {
+            "cf_nl": 0, 
+            "cf_dry": 0, 
+            "cf_id": 67, 
+            "cf_newnl": 0, 
+            "cf_nclick": 0
+        }
+    }, 
+    {
+        "away": true, 
+        "features": {
+            "text": "Великобритания", 
+            "class": "reg-item", 
+            "tagName": "SPAN"
+        }, 
+        "cf_params": {
+            "cf_nl": 0, 
+            "cf_dry": 0, 
+            "cf_id": 68, 
+            "cf_newnl": 0, 
+            "cf_nclick": 0
+        }
+    }, 
+    {
+        "away": true, 
+        "features": {
+            "text": "Германия", 
+            "class": "reg-item", 
+            "tagName": "SPAN"
+        }, 
+        "cf_params": {
+            "cf_nl": 0, 
+            "cf_dry": 0, 
+            "cf_id": 69, 
+            "cf_newnl": 0, 
+            "cf_nclick": 0
+        }
+    }, 
+    {
+        "away": true, 
+        "features": {
+            "text": "Греция", 
+            "class": "reg-item", 
+            "tagName": "SPAN"
+        }, 
+        "cf_params": {
+            "cf_nl": 0, 
+            "cf_dry": 0, 
+            "cf_id": 70, 
+            "cf_newnl": 0, 
+            "cf_nclick": 0
+        }
+    }, 
+    {
+        "away": true, 
+        "features": {
+            "text": "Египет", 
+            "class": "reg-item", 
+            "tagName": "SPAN"
+        }, 
+        "cf_params": {
+            "cf_nl": 0, 
+            "cf_dry": 0, 
+            "cf_id": 71, 
+            "cf_newnl": 0, 
+            "cf_nclick": 0
+        }
+    }, 
+    {
+        "away": true, 
+        "features": {
+            "text": "Испания", 
+            "class": "reg-item", 
+            "tagName": "SPAN"
+        }, 
+        "cf_params": {
+            "cf_nl": 0, 
+            "cf_dry": 0, 
+            "cf_id": 72, 
+            "cf_newnl": 0, 
+            "cf_nclick": 0
+        }
+    }, 
+    {
+        "away": true, 
+        "features": {
+            "text": "Израиль", 
+            "class": "reg-item", 
+            "tagName": "SPAN"
+        }, 
+        "cf_params": {
+            "cf_nl": 0, 
+            "cf_dry": 0, 
+            "cf_id": 73, 
+            "cf_newnl": 0, 
+            "cf_nclick": 0
+        }
+    }, 
+    {
+        "away": true, 
+        "features": {
+            "text": "Канада", 
+            "class": "reg-item", 
+            "tagName": "SPAN"
+        }, 
+        "cf_params": {
+            "cf_nl": 0, 
+            "cf_dry": 0, 
+            "cf_id": 74, 
+            "cf_newnl": 0, 
+            "cf_nclick": 0
+        }
+    }, 
+    {
+        "away": true, 
+        "features": {
+            "text": "Казахстан", 
+            "class": "reg-item", 
+            "tagName": "SPAN"
+        }, 
+        "cf_params": {
+            "cf_nl": 0, 
+            "cf_dry": 0, 
+            "cf_id": 75, 
+            "cf_newnl": 0, 
+            "cf_nclick": 0
+        }
+    }, 
+    {
+        "away": true, 
+        "features": {
+            "text": "Киргизия", 
+            "class": "reg-item", 
+            "tagName": "SPAN"
+        }, 
+        "cf_params": {
+            "cf_nl": 0, 
+            "cf_dry": 0, 
+            "cf_id": 76, 
+            "cf_newnl": 0, 
+            "cf_nclick": 0
+        }
+    }, 
+    {
+        "away": true, 
+        "features": {
+            "text": "Латвия", 
+            "class": "reg-item", 
+            "tagName": "SPAN"
+        }, 
+        "cf_params": {
+            "cf_nl": 0, 
+            "cf_dry": 0, 
+            "cf_id": 77, 
+            "cf_newnl": 0, 
+            "cf_nclick": 0
+        }
+    }, 
+    {
+        "away": true, 
+        "features": {
+            "text": "Молдова", 
+            "class": "reg-item", 
+            "tagName": "SPAN"
+        }, 
+        "cf_params": {
+            "cf_nl": 0, 
+            "cf_dry": 0, 
+            "cf_id": 78, 
+            "cf_newnl": 0, 
+            "cf_nclick": 0
+        }
+    }, 
+    {
+        "away": true, 
+        "features": {
+            "text": "США", 
+            "class": "reg-item", 
+            "tagName": "SPAN"
+        }, 
+        "cf_params": {
+            "cf_nl": 0, 
+            "cf_dry": 0, 
+            "cf_id": 79, 
+            "cf_newnl": 0, 
+            "cf_nclick": 0
+        }
+    }, 
+    {
+        "away": true, 
+        "features": {
+            "text": "Турция", 
+            "class": "reg-item", 
+            "tagName": "SPAN"
+        }, 
+        "cf_params": {
+            "cf_nl": 0, 
+            "cf_dry": 0, 
+            "cf_id": 80, 
+            "cf_newnl": 0, 
+            "cf_nclick": 0
+        }
+    }, 
+    {
+        "away": true, 
+        "features": {
+            "text": "Украина (Киев)", 
+            "class": "reg-item", 
+            "tagName": "SPAN"
+        }, 
+        "cf_params": {
+            "cf_nl": 0, 
+            "cf_dry": 0, 
+            "cf_id": 81, 
+            "cf_newnl": 0, 
+            "cf_nclick": 0
+        }
+    }, 
+    {
+        "away": true, 
+        "features": {
+            "text": "Украина (Донецк, Луганск)", 
+            "class": "reg-item", 
+            "tagName": "SPAN"
+        }, 
+        "cf_params": {
+            "cf_nl": 0, 
+            "cf_dry": 0, 
+            "cf_id": 82, 
+            "cf_newnl": 0, 
+            "cf_nclick": 0
+        }
+    }, 
+    {
+        "away": true, 
+        "features": {
+            "text": "Эмираты", 
+            "class": "reg-item", 
+            "tagName": "SPAN"
+        }, 
+        "cf_params": {
+            "cf_nl": 0, 
+            "cf_dry": 0, 
+            "cf_id": 83, 
+            "cf_newnl": 0, 
+            "cf_nclick": 0
+        }
+    }, 
+    {
+        "away": true, 
+        "features": {
+            "text": "Эстония", 
+            "class": "reg-item", 
+            "tagName": "SPAN"
+        }, 
+        "cf_params": {
+            "cf_nl": 0, 
+            "cf_dry": 0, 
+            "cf_id": 84, 
             "cf_newnl": 0, 
             "cf_nclick": 0
         }
