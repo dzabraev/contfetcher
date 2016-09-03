@@ -15,8 +15,18 @@ function sleep(milliseconds) {
   }
 }
 
+function defer() {
+    if (unsafeWindow.jQuery) {
+       replaceJq();
+       return;
+    }
+    else {
+        //console.log('wait jquery')
+        setTimeout( defer, 1000);
+    }
+}
 
-window.addEventListener('load', function() {
+function replaceJq() {
   console.log('greaceMonkey: start replacing');
   var origAjax=unsafeWindow.jQuery.ajax;
   var f = function(origAjax) {
@@ -26,7 +36,7 @@ window.addEventListener('load', function() {
        var succ_orig = url.success;       
        var curry_succ = function(orig,id) {
          return function(...args) {
-          
+           //unsafeWindow.alert("test");
            console.log('greaceMonkey: curred ajax callback called');
            res=orig(...args);
            console.log('greaceMonkey: curred ajax callback finished');
@@ -59,6 +69,7 @@ window.addEventListener('load', function() {
        meta.setAttribute("status","processing");       
        elem.appendChild(meta);      
        url.success=curry_succ(succ_orig,lastid+1);
+       //TODO а если неудача?
        result=origAjax(url,options);
        console.log('greaceMonkey: curryied callback finished');
        return result;
@@ -71,6 +82,11 @@ window.addEventListener('load', function() {
    };
   };
   unsafeWindow.jQuery.ajax=f(origAjax);
+  //elem=document.createElement('meta');
+  //elem.id="contfetcherAjaxCurryd";
+  //document.head.appendChild(elem);
   console.log('greaceMonkey: $.ajax was replaced');
-},false);
+}                   
+                   
+window.addEventListener('load', defer,false);
 
