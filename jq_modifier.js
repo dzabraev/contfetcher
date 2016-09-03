@@ -82,9 +82,9 @@ function replaceJq() {
    };
   };
   unsafeWindow.jQuery.ajax=f(origAjax);
-  //elem=document.createElement('meta');
-  //elem.id="contfetcherAjaxCurryd";
-  //document.head.appendChild(elem);
+  elem=document.createElement('meta');
+  elem.id="contfetcherAjaxCurryd";
+  document.head.appendChild(elem);
   console.log('greaceMonkey: $.ajax was replaced');
 }                   
                    
