@@ -15,7 +15,8 @@
     let { require } = Cu.import("resource://devtools/shared/Loader.jsm", {});
     //let inspector = require("devtools/server/actors/inspector");
     const {EventParsers} = require("devtools/shared/event-parsers");
-    
+    var ioService = Components.classes["@mozilla.org/network/io-service;1"]
+                          .getService(Components.interfaces.nsIIOService);
     //var all =  document.getElementsByTagName("*");
 
 function relPathToAbs (sRelPath) {
@@ -31,10 +32,16 @@ function relPathToAbs (sRelPath) {
 }
 
 function makeAbsPath(path) {
+/*
   if(path[0]=='/' || path[0]=='#' || path[0]=='.' || path[0]=='?')
     return relPathToAbs(path);
   else
     return path;
+*/
+  /* http://stackoverflow.com/questions/8055763/get-absolute-url-from-relative-url-in-firefox-extension */
+  let baseURI = ioService.newURI(gBrowser.contentDocument.location.origin, null, null);
+  let absURI  = ioService.newURI(path, null, baseURI);
+  return absURI.spec;
 }
 
 function getSelfHrefs(type,docum,layer) {
