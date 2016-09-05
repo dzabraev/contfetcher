@@ -579,9 +579,15 @@ function visible(element) {
         elem.setAttribute(key,newWal);
       };
       this.pushButton = function(cf_id,label) {
+        let BUTTON_PUSH_OK="BUTTON_PUSH_OK",
+            BUTTON_LOST="BUTTON_LOST";
         this.layer+=1;
         this.last_pushed_button=cf_id;
-        let activeElem=getElementByCfId(gBrowser.contentDocument,cf_id);
+        let activeElem=getElementByCfId(gBrowser.contentDocument,cf_id,false);
+        if(!activeElem) {
+          /*похоже, что кнопка пропала*/
+          return BUTTON_LOST;
+        }
         let evt = gBrowser.contentDocument.createEvent("MouseEvents");
         evt.initEvent("click", true, true);
         let ajaxStor=gBrowser.contentDocument.getElementById('contfetcherAjaxStorage');
@@ -597,7 +603,7 @@ function visible(element) {
         gBrowser.contentDocument.head.appendChild(ajaxStor);
         activeElem.dispatchEvent(evt);
         this.addInt(activeElem,'contfetcher_nclick',1);
-        return true;
+        return BUTTON_PUSH_OK;
       };
       this.checkButtonPushed = function(label) {
         let STORAGE_NOT_EXISTS=-3,
