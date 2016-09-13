@@ -19,16 +19,16 @@
                           .getService(Components.interfaces.nsIIOService);
     //var all =  document.getElementsByTagName("*");
 
-function relPathToAbs (sRelPath) {
-  /*https://developer.mozilla.org/en-US/docs/Web/API/document/cookie#Using_relative_URLs_in_the_path_parameter*/
-  var nUpLn, sDir = gBrowser.contentDocument.location.origin, 
-      sPath = gBrowser.contentDocument.
-          location.pathname.replace(/[^\/]*$/, sRelPath.replace(/(\/|^)(?:\.?\/+)+/g, "$1"));
-  for (var nEnd, nStart = 0; nEnd = sPath.indexOf("/../", nStart), nEnd > -1; nStart = nEnd + nUpLn) {
-    nUpLn = /^\/(?:\.\.\/)*/.exec(sPath.slice(nEnd))[0].length;
-    sDir = (sDir + sPath.substring(nStart, nEnd)).replace(new RegExp("(?:\\\/+[^\\\/]*){0," + ((nUpLn - 1) / 3) + "}$"), "/");
+
+function ajax_expected() {
+  all=gBrowser.contentDocument.head.getElementsByTagName('script');
+  for(let i=0,l=all.length;i<l;i++) {
+    script=all[i];
+    if(script.hasAttribute('src') && script.getAttribute('src').toLowerCase().search('jquery')!=-1) {
+      return true;
+    }
   }
-  return sDir + sPath.substr(nStart);
+  return false;
 }
 
 function makeAbsPath(path) {
@@ -44,8 +44,7 @@ function makeAbsPath(path) {
   return absURI.spec;
 }
 
-function getSelfHrefs(type,docum,layer) {
-  let baseurl;
+function getSelfHrefs(type,docum,baseurl,layer) {
   if(!docum) {
     if(gBrowser && gBrowser.contentDocument)
       docum=gBrowser.contentDocument;
@@ -56,7 +55,6 @@ function getSelfHrefs(type,docum,layer) {
 
   if(!docum)
     throw "document is undefined";
-  baseurl=docum.location.origin;
   let hrefs=[],
       predicate;
   if(type=="all")
@@ -133,7 +131,7 @@ function getEventListeners(node) {
 
 function enumDebugId(document) {
   if(!document)
-    document=gBrowser.contentDocument
+    document=gBrowser.contentDocument;
   let allNodes = document.getElementsByTagName('*');
   let elem;
   let cnt=0;
@@ -210,23 +208,28 @@ function hashCode(str) {
 
 function getBase(href) {
   hrefArr=href.split('/');
+  if(hrefArr.length<3)
+    return [];
   hrefHost=hrefArr[2];
   hrefHostArr=hrefHost.split('.');
-  hrefLen=hrefHostArr.length;
-  return [hrefHostArr[hrefLen-2],hrefHostArr[hrefLen-1]];
+  return hrefHostArr;
+  //hrefLen=hrefHostArr.length;
+  //return [hrefHostArr[hrefLen-2],hrefHostArr[hrefLen-1]];
 }
 
 function selfHref(baseurl,href) {
-  if(href[0]=='/') {
-    return true;
-  }
-  if(href[0]=='#')
-    return false;
-  if(!href.match(/https?:\/\/.+/))
-    return false; 
+  //console.log(baseurl,href)
+  href=makeAbsPath(href);
   b1=getBase(baseurl);
   b2=getBase(href);
-  return (b1[0]===b2[0]) && (b1[1]===b2[1]) ;
+  if(b1.length!=b2.length)
+    return false;
+  for(let i=0,l=b1.length;i<l;i++) {
+    if(b1[i]!=b2[i])
+      return false;
+  }
+  return true;
+  //return (b1[0]===b2[0]) && (b1[1]===b2[1]) ;
 }
 
 function hashPage(document) {
@@ -578,6 +581,25 @@ function visible(element) {
         let newWal=parseInt(elem.getAttribute(key))+n;
         elem.setAttribute(key,newWal);
       };
+      this.getCurrentButtons = function() {
+        let allNodes = gBrowser.contentDocument.getElementsByTagName('*');
+        let elem;
+        let curBts=[];
+        let allBts=this.buttons,allBtsL=allBts.length;
+        for(let i=0;i<allNodes.length;i++) {
+          elem=allNodes[i];
+          if( elem.hasAttribute('contfetcher_id') ) {
+            let id=elem.getAttribute('contfetcher_id');
+            for(let j=0;j<allBtsL;j++) {
+              if(allBts[j].cf_params.cf_id==id) {
+                curBts.push(allBts[j]);
+                break;
+              }
+            }
+          }
+        }
+        return curBts;
+      };
       this.pushButton = function(cf_id,label) {
         let BUTTON_PUSH_OK="BUTTON_PUSH_OK",
             BUTTON_LOST="BUTTON_LOST";
@@ -739,7 +761,7 @@ function visible(element) {
           }
           if ( this.enabledButtonCond(elem) ) { /*this is button*/
             if(!elem.hasAttribute('contfetcher_id')) {
-              this.log('button found');
+              //this.log('button found');
               let buttonId;
               let local_nl=0;
               let local_newnl=0;
@@ -750,8 +772,8 @@ function visible(element) {
               bf.features = this.computeElemFeatures(elem);
               let existBf= this.findFeatures(bf);
               if( existBf ) {
-                this.log('this old button',JSON.stringify(bf.features));
-                this.log('this old button__',bf.features.text,bf.features.tagName);
+                //this.log('this old button',JSON.stringify(bf.features));
+                //this.log('this old button__',bf.features.text,bf.features.tagName);
                 /*эта кнопка уже встречалась ранее*/
                 let cfp  =existBf.cf_params;
                 buttonId=cfp.cf_id;
@@ -761,9 +783,9 @@ function visible(element) {
                 */
                 let colliz=getElementByCfId(gBrowser.contentDocument,buttonId,false);
                 if(colliz) {
-                  console.log('semms tobe this same buttons');
-                  console.log('collision new',getXpath(gBrowser.contentDocument,elem));
-                  console.log('collision old',getXpath(gBrowser.contentDocument,colliz));
+                  //console.log('semms tobe this same buttons');
+                  //console.log('collision new',getXpath(gBrowser.contentDocument,elem));
+                  //console.log('collision old',getXpath(gBrowser.contentDocument,colliz));
                   continue;
                   //throw "collision: "; //+JSON.stringify(bf);
                 }
@@ -773,7 +795,7 @@ function visible(element) {
                 local_nclick=  cfp.cf_nclick;
               }
               else {
-                this.log('\tthis new button');
+                //this.log('\tthis new button');
                 buttonId=this.cnt;
                 this.cnt+=1;
                 bf.cf_params = {

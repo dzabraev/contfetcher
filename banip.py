@@ -4,9 +4,11 @@ import os
 def ban(ipfile):
   f=open(ipfile)
   for ip in f.readlines():
-    if len(ip) > 0 and ip[-1]=='\n':
+    if len(ip)==0:
+      continue
+    if ip[-1]=='\n':
       ip=ip[:-1]
-    cmd='iptables -A OUTPUT -d {ip} -j DROP'.format(ip=ip)
+    cmd='iptables -D OUTPUT -d {ip} -j REJECT'.format(ip=ip)
     print cmd
     os.system(cmd)
   f.close()

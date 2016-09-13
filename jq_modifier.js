@@ -15,6 +15,17 @@ function sleep(milliseconds) {
   }
 }
 
+function ajax_expected() {
+  all=document.head.getElementsByTagName('script');
+  for(let i=0,l=all.length;i<l;i++) {
+    script=all[i];
+    if(script.hasAttribute('src') && script.getAttribute('src').toLowerCase().search('jquery')!=-1) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function defer() {
     if (unsafeWindow.jQuery) {
        replaceJq();
@@ -22,7 +33,8 @@ function defer() {
     }
     else {
         //console.log('wait jquery')
-        setTimeout( defer, 1000);
+        if(ajax_expected())
+          setTimeout( defer, 1000);
     }
 }
 
