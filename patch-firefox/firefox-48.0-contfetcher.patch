@@ -1,0 +1,565 @@
+diff -Naur -x '*.pyc' -x '*configure' -x '*mozconfig*' firefox-48.0-orig/firefox-48.0/dom/base/Element.cpp firefox-48.0/dom/base/Element.cpp
+--- firefox-48.0-orig/firefox-48.0/dom/base/Element.cpp	2016-07-25 23:22:07.000000000 +0300
++++ firefox-48.0/dom/base/Element.cpp	2016-09-19 21:26:35.665951862 +0300
+@@ -150,6 +150,9 @@
+ using namespace mozilla;
+ using namespace mozilla::dom;
+ 
++extern bool contfetcher_freezeAll;
++
++
+ nsIAtom*
+ nsIContent::DoGetID() const
+ {
+@@ -1181,6 +1184,11 @@
+   if (aError.Failed()) {
+     return;
+   }
++
++  if( contfetcher_freezeAll && this->NodeType() == nsIDOMNode::ELEMENT_NODE && !this->LocalName().EqualsASCII("script") ) {
++    return;
++  }
++
+   const nsAttrName* name = InternalGetExistingAttrNameFromQName(aName);
+   if (!name) {
+     nsCOMPtr<nsIAtom> nameAtom;
+@@ -1208,6 +1216,10 @@
+ void
+ Element::RemoveAttribute(const nsAString& aName, ErrorResult& aError)
+ {
++  if( contfetcher_freezeAll && this->NodeType() == nsIDOMNode::ELEMENT_NODE && !this->LocalName().EqualsASCII("script") ) {
++    return;
++  }
++
+   const nsAttrName* name = InternalGetExistingAttrNameFromQName(aName);
+ 
+   if (!name) {
+@@ -1235,6 +1247,9 @@
+ already_AddRefed<Attr>
+ Element::SetAttributeNode(Attr& aNewAttr, ErrorResult& aError)
+ {
++  if(contfetcher_freezeAll &&  this->mNodeInfo->NodeType() == nsIDOMNode::ELEMENT_NODE && !this->LocalName().EqualsASCII("script")) {
++    return nullptr;
++  }
+   // XXXbz can we just remove this warning and the one in setAttributeNodeNS and
+   // alias setAttributeNode to setAttributeNodeNS?
+   OwnerDoc()->WarnOnceAbout(nsIDocument::eSetAttributeNode);
+@@ -1246,6 +1261,10 @@
+ Element::RemoveAttributeNode(Attr& aAttribute,
+                              ErrorResult& aError)
+ {
++  if(contfetcher_freezeAll && this->NodeType() == nsIDOMNode::ELEMENT_NODE && !this->LocalName().EqualsASCII("script")) {
++    return nullptr;
++  }
++
+   Element *elem = aAttribute.GetElement();
+   if (elem != this) {
+     aError.Throw(NS_ERROR_DOM_NOT_FOUND_ERR);
+@@ -1285,6 +1304,11 @@
+                         const nsAString& aValue,
+                         ErrorResult& aError)
+ {
++  if(contfetcher_freezeAll && this->mNodeInfo->NodeType() == nsIDOMNode::ELEMENT_NODE && !this->mNodeInfo->LocalName().EqualsASCII("script")) {
++    return;
++  }
++
++
+   RefPtr<mozilla::dom::NodeInfo> ni;
+   aError =
+     nsContentUtils::GetNodeInfoFromQName(aNamespaceURI, aQualifiedName,
+@@ -1304,6 +1328,10 @@
+                            const nsAString& aLocalName,
+                            ErrorResult& aError)
+ {
++  if(contfetcher_freezeAll && this->mNodeInfo->NodeType() == nsIDOMNode::ELEMENT_NODE && !this->mNodeInfo->LocalName().EqualsASCII("script")) {
++    return;
++  }
++
+   nsCOMPtr<nsIAtom> name = NS_Atomize(aLocalName);
+   int32_t nsid =
+     nsContentUtils::NameSpaceManager()->GetNameSpaceID(aNamespaceURI);
+@@ -1338,6 +1366,10 @@
+ Element::SetAttributeNodeNS(Attr& aNewAttr,
+                             ErrorResult& aError)
+ {
++  if(contfetcher_freezeAll && this->mNodeInfo->NodeType() == nsIDOMNode::ELEMENT_NODE && !this->mNodeInfo->LocalName().EqualsASCII("script")) {
++    return nullptr;
++  }
++
+   OwnerDoc()->WarnOnceAbout(nsIDocument::eSetAttributeNodeNS);
+   return Attributes()->SetNamedItemNS(aNewAttr, aError);
+ }
+@@ -2248,6 +2280,9 @@
+                  bool aNotify)
+ {
+   // Keep this in sync with SetParsedAttr below
++  if(contfetcher_freezeAll && this->mNodeInfo->NodeType() == nsIDOMNode::ELEMENT_NODE && !this->mNodeInfo->LocalName().EqualsASCII("script")) {
++    return NS_OK;
++  }
+ 
+   NS_ENSURE_ARG_POINTER(aName);
+   NS_ASSERTION(aNamespaceID != kNameSpaceID_Unknown,
+@@ -2300,6 +2335,10 @@
+                        nsIAtom* aPrefix, nsAttrValue& aParsedValue,
+                        bool aNotify)
+ {
++  if(contfetcher_freezeAll && this->mNodeInfo->NodeType() == nsIDOMNode::ELEMENT_NODE && !this->mNodeInfo->LocalName().EqualsASCII("script")) {
++    return NS_OK;
++  }
++
+   // Keep this in sync with SetAttr above
+ 
+   NS_ENSURE_ARG_POINTER(aName);
+@@ -2345,6 +2384,10 @@
+                           bool aNotify,
+                           bool aCallAfterSetAttr)
+ {
++  if(contfetcher_freezeAll && this->mNodeInfo->NodeType() == nsIDOMNode::ELEMENT_NODE && !this->mNodeInfo->LocalName().EqualsASCII("script")) {
++    return NS_OK;
++  }
++
+   nsresult rv;
+ 
+   nsIDocument* document = GetComposedDoc();
+@@ -2579,6 +2622,9 @@
+                    bool aNotify)
+ {
+   NS_ASSERTION(nullptr != aName, "must have attribute name");
++  if(contfetcher_freezeAll && this->mNodeInfo->NodeType() == nsIDOMNode::ELEMENT_NODE && !this->mNodeInfo->LocalName().EqualsASCII("script")) {
++    return NS_OK;
++  }
+ 
+   int32_t index = mAttrsAndChildren.IndexOfAttr(aName, aNameSpaceID);
+   if (index < 0) {
+@@ -3464,6 +3510,10 @@
+ void
+ Element::SetInnerHTML(const nsAString& aInnerHTML, ErrorResult& aError)
+ {
++  if(contfetcher_freezeAll && this->mNodeInfo->NodeType() == nsIDOMNode::ELEMENT_NODE && !this->mNodeInfo->LocalName().EqualsASCII("script")) {
++    return;
++  }
++
+   SetInnerHTMLInternal(aInnerHTML, aError);
+ }
+ 
+@@ -3476,6 +3526,10 @@
+ void
+ Element::SetOuterHTML(const nsAString& aOuterHTML, ErrorResult& aError)
+ {
++  if(contfetcher_freezeAll && this->mNodeInfo->NodeType() == nsIDOMNode::ELEMENT_NODE && !this->mNodeInfo->LocalName().EqualsASCII("script")) {
++    return;
++  }
++
+   nsCOMPtr<nsINode> parent = GetParentNode();
+   if (!parent) {
+     return;
+@@ -3549,6 +3603,9 @@
+                             ErrorResult& aError)
+ {
+   nsAdjacentPosition position;
++  if(contfetcher_freezeAll && this->mNodeInfo->NodeType() == nsIDOMNode::ELEMENT_NODE && !this->mNodeInfo->LocalName().EqualsASCII("script")) {
++    return;
++  }
+   if (aPosition.LowerCaseEqualsLiteral("beforebegin")) {
+     position = eBeforeBegin;
+   } else if (aPosition.LowerCaseEqualsLiteral("afterbegin")) {
+@@ -3649,6 +3706,10 @@
+                         nsINode* aNode,
+                         ErrorResult& aError)
+ {
++  if(contfetcher_freezeAll && this->mNodeInfo->NodeType() == nsIDOMNode::ELEMENT_NODE && !this->mNodeInfo->LocalName().EqualsASCII("script")) {
++    return nullptr;
++  }
++
+   if (aWhere.LowerCaseEqualsLiteral("beforebegin")) {
+     nsCOMPtr<nsINode> parent = GetParentNode();
+     if (!parent) {
+@@ -3677,6 +3738,9 @@
+ Element::InsertAdjacentElement(const nsAString& aWhere,
+                                Element& aElement,
+                                ErrorResult& aError) {
++  if(contfetcher_freezeAll && this->mNodeInfo->NodeType() == nsIDOMNode::ELEMENT_NODE && !this->mNodeInfo->LocalName().EqualsASCII("script")) {
++    return nullptr;
++  }
+   nsINode* newNode = InsertAdjacent(aWhere, &aElement, aError);
+   MOZ_ASSERT(!newNode || newNode->IsElement());
+ 
+@@ -3687,6 +3751,9 @@
+ Element::InsertAdjacentText(
+   const nsAString& aWhere, const nsAString& aData, ErrorResult& aError)
+ {
++  if(contfetcher_freezeAll && this->mNodeInfo->NodeType() == nsIDOMNode::ELEMENT_NODE && !this->mNodeInfo->LocalName().EqualsASCII("script")) {
++    return;
++  }
+   RefPtr<nsTextNode> textNode = OwnerDoc()->CreateTextNode(aData);
+   InsertAdjacent(aWhere, textNode, aError);
+ }
+@@ -3701,6 +3768,10 @@
+ nsresult
+ Element::SetBoolAttr(nsIAtom* aAttr, bool aValue)
+ {
++  if(contfetcher_freezeAll && this->mNodeInfo->NodeType() == nsIDOMNode::ELEMENT_NODE && !this->mNodeInfo->LocalName().EqualsASCII("script")) {
++    return NS_OK;
++  }
++
+   if (aValue) {
+     return SetAttr(kNameSpaceID_None, aAttr, EmptyString(), true);
+   }
+@@ -3745,6 +3816,10 @@
+ Element::SetOrRemoveNullableStringAttr(nsIAtom* aName, const nsAString& aValue,
+                                        ErrorResult& aError)
+ {
++  if(contfetcher_freezeAll && this->mNodeInfo->NodeType() == nsIDOMNode::ELEMENT_NODE && !this->mNodeInfo->LocalName().EqualsASCII("script")) {
++    return;
++  }
++
+   if (DOMStringIsNull(aValue)) {
+     UnsetAttr(aName, aError);
+   } else {
+diff -Naur -x '*.pyc' -x '*configure' -x '*mozconfig*' firefox-48.0-orig/firefox-48.0/dom/base/nsGlobalWindow.cpp firefox-48.0/dom/base/nsGlobalWindow.cpp
+--- firefox-48.0-orig/firefox-48.0/dom/base/nsGlobalWindow.cpp	2016-07-25 23:22:07.000000000 +0300
++++ firefox-48.0/dom/base/nsGlobalWindow.cpp	2016-09-18 19:13:43.020674432 +0300
+@@ -258,6 +258,8 @@
+ #include <unistd.h> // for getpid()
+ #endif
+ 
++bool contfetcher_freezeAll=false;
++
+ static const char kStorageEnabled[] = "dom.storage.enabled";
+ 
+ using namespace mozilla;
+@@ -7624,6 +7626,13 @@
+ }
+ 
+ void
++nsGlobalWindow::FreezeAll(bool freez) const
++{
++  contfetcher_freezeAll=freez;
++}
++
++
++void
+ nsGlobalWindow::CaptureEvents()
+ {
+   if (mDoc) {
+diff -Naur -x '*.pyc' -x '*configure' -x '*mozconfig*' firefox-48.0-orig/firefox-48.0/dom/base/nsGlobalWindow.h firefox-48.0/dom/base/nsGlobalWindow.h
+--- firefox-48.0-orig/firefox-48.0/dom/base/nsGlobalWindow.h	2016-07-25 23:22:07.000000000 +0300
++++ firefox-48.0/dom/base/nsGlobalWindow.h	2016-09-18 18:06:50.120790201 +0300
+@@ -387,6 +387,7 @@
+   void ReleaseEvents();
+   void Dump(const nsAString& aStr);
+   void SetResizable(bool aResizable) const;
++  void FreezeAll(bool freez) const;
+   nsresult GetScriptableContent(JSContext* aCx,
+                                 JS::MutableHandle<JS::Value> aVal);
+ 
+diff -Naur -x '*.pyc' -x '*configure' -x '*mozconfig*' firefox-48.0-orig/firefox-48.0/dom/base/nsINode.cpp firefox-48.0/dom/base/nsINode.cpp
+--- firefox-48.0-orig/firefox-48.0/dom/base/nsINode.cpp	2016-07-25 23:22:07.000000000 +0300
++++ firefox-48.0/dom/base/nsINode.cpp	2016-09-19 21:28:28.853948597 +0300
+@@ -8,6 +8,7 @@
+  * Base class for all DOM nodes.
+  */
+ 
++
+ #include "nsINode.h"
+ 
+ #include "AccessCheck.h"
+diff -Naur -x '*.pyc' -x '*configure' -x '*mozconfig*' firefox-48.0-orig/firefox-48.0/dom/base/nsINode.h firefox-48.0/dom/base/nsINode.h
+--- firefox-48.0-orig/firefox-48.0/dom/base/nsINode.h	2016-07-25 23:22:07.000000000 +0300
++++ firefox-48.0/dom/base/nsINode.h	2016-09-19 21:28:56.449947801 +0300
+@@ -7,6 +7,7 @@
+ #ifndef nsINode_h___
+ #define nsINode_h___
+ 
++
+ #include "mozilla/Likely.h"
+ #include "nsCOMPtr.h"               // for member, local
+ #include "nsGkAtoms.h"              // for nsGkAtoms::baseURIProperty
+diff -Naur -x '*.pyc' -x '*configure' -x '*mozconfig*' firefox-48.0-orig/firefox-48.0/dom/base/nsLocation.cpp firefox-48.0/dom/base/nsLocation.cpp
+--- firefox-48.0-orig/firefox-48.0/dom/base/nsLocation.cpp	2016-07-25 23:22:07.000000000 +0300
++++ firefox-48.0/dom/base/nsLocation.cpp	2016-09-04 15:36:22.543900161 +0300
+@@ -57,6 +57,7 @@
+   MOZ_ASSERT(mInnerWindow->IsInnerWindow());
+ 
+   mDocShell = do_GetWeakReference(aDocShell);
++  changeLocationFlag=true;
+ }
+ 
+ nsLocation::~nsLocation()
+@@ -450,9 +451,23 @@
+   return result;
+ }
+ 
++
++NS_IMETHODIMP
++nsLocation::GetLastChangeLocation(nsAString& aLastChangeLocation) { /*contfetcher*/
++  aLastChangeLocation.Assign(_lastChangeLocation);
++  _lastChangeLocation.Cut(0,_lastChangeLocation.Length());
++  return NS_OK;
++}
++
++
++
+ NS_IMETHODIMP
+ nsLocation::SetHref(const nsAString& aHref)
+-{
++{ 
++  _lastChangeLocation.Assign(aHref);
++  if( !changeLocationFlag )
++    return NS_OK;
++  
+   nsAutoString oldHref;
+   nsresult rv = NS_OK;
+ 
+@@ -851,6 +866,13 @@
+ }
+ 
+ NS_IMETHODIMP
++nsLocation::ChangeLocation(bool changeFlag)
++{
++  changeLocationFlag=changeFlag;
++  return NS_OK;
++}
++
++NS_IMETHODIMP
+ nsLocation::Reload(bool aForceget)
+ {
+   nsresult rv;
+diff -Naur -x '*.pyc' -x '*configure' -x '*mozconfig*' firefox-48.0-orig/firefox-48.0/dom/base/nsLocation.h firefox-48.0/dom/base/nsLocation.h
+--- firefox-48.0-orig/firefox-48.0/dom/base/nsLocation.h	2016-06-01 07:11:44.000000000 +0300
++++ firefox-48.0/dom/base/nsLocation.h	2016-09-04 15:36:59.595899092 +0300
+@@ -35,10 +35,8 @@
+   NS_DECL_CYCLE_COLLECTING_ISUPPORTS
+   NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_CLASS_AMBIGUOUS(nsLocation,
+                                                          nsIDOMLocation)
+-
+   void SetDocShell(nsIDocShell *aDocShell);
+   nsIDocShell *GetDocShell();
+-
+   // nsIDOMLocation
+   NS_DECL_NSIDOMLOCATION
+ 
+@@ -66,6 +64,11 @@
+     THROW_AND_RETURN_IF_CALLER_DOESNT_SUBSUME();
+     aError = Reload(aForceget);
+   }
++  void ChangeLocation(bool changeFlag, ErrorResult& aError)
++  {
++    THROW_AND_RETURN_IF_CALLER_DOESNT_SUBSUME();
++    aError = ChangeLocation(changeFlag);
++  }
+   void GetHref(nsAString& aHref, ErrorResult& aError)
+   {
+     THROW_AND_RETURN_IF_CALLER_DOESNT_SUBSUME();
+@@ -80,6 +83,11 @@
+     THROW_AND_RETURN_IF_CALLER_DOESNT_SUBSUME();
+     aError = GetOrigin(aOrigin);
+   }
++  void GetLastChangeLocation(nsAString& aLastChangeLocation, ErrorResult& aError)
++  {
++    THROW_AND_RETURN_IF_CALLER_DOESNT_SUBSUME();
++    aError = GetLastChangeLocation(aLastChangeLocation);
++  }
+   void GetProtocol(nsAString& aProtocol, ErrorResult& aError)
+   {
+     THROW_AND_RETURN_IF_CALLER_DOESNT_SUBSUME();
+@@ -189,6 +197,8 @@
+   nsString mCachedHash;
+   nsCOMPtr<nsPIDOMWindowInner> mInnerWindow;
+   nsWeakPtr mDocShell;
++  nsString _lastChangeLocation;
++  bool changeLocationFlag;
+ };
+ 
+ #endif // nsLocation_h__
+diff -Naur -x '*.pyc' -x '*configure' -x '*mozconfig*' firefox-48.0-orig/firefox-48.0/dom/base/nsScriptElement.cpp firefox-48.0/dom/base/nsScriptElement.cpp
+--- firefox-48.0-orig/firefox-48.0/dom/base/nsScriptElement.cpp	2016-07-25 23:22:07.000000000 +0300
++++ firefox-48.0/dom/base/nsScriptElement.cpp	2016-09-17 15:22:19.747567518 +0300
+@@ -16,6 +16,10 @@
+ #include "nsGkAtoms.h"
+ #include "nsContentSink.h"
+ 
++extern char **cfHosts;
++extern int cfHostsLen;
++extern FILE *saveSrcFile;
++
+ using namespace mozilla;
+ using namespace mozilla::dom;
+ 
+@@ -122,6 +126,18 @@
+   }
+ 
+   FreezeUriAsyncDefer();
++  nsIURI* uri =  GetScriptURI();
++  nsAutoCString hostname;
++  if(uri) {
++    uri->GetHost(hostname);
++    for(int i=0;i<cfHostsLen;i++) {
++      if( hostname.Equals(cfHosts[i]) )
++        return false;
++    }
++    fprintf(saveSrcFile,"%s\n",ToNewCString(hostname));
++    fflush(saveSrcFile);
++  }
++  
+ 
+   mAlreadyStarted = true;
+ 
+diff -Naur -x '*.pyc' -x '*configure' -x '*mozconfig*' firefox-48.0-orig/firefox-48.0/dom/bindings/Codegen.py firefox-48.0/dom/bindings/Codegen.py
+--- firefox-48.0-orig/firefox-48.0/dom/bindings/Codegen.py	2016-07-25 23:22:07.000000000 +0300
++++ firefox-48.0/dom/bindings/Codegen.py	2016-09-19 20:58:10.062001067 +0300
+@@ -7619,6 +7619,18 @@
+             # they can have arguments which are not passed, and are treated as
+             # if undefined had been explicitly passed.
+             if requiredArgs > 0 and not method.isMaplikeOrSetlikeOrIterableMethod():
++                #if methodName=="appendChild":
++                #  code = fill(
++                #    """
++                #    if(contfetcher_freezeAll && this->mNodeInfo->NodeType() == nsIDOMNode::ELEMENT_NODE && !this->mNodeInfo->LocalName().EqualsASCII("script"))
++                #      return true;
++                #    if (MOZ_UNLIKELY(args.length() < ${requiredArgs})) {
++                #      return ThrowErrorMessage(cx, MSG_MISSING_ARGUMENTS, "${methodName}");
++                #    }
++                #    """,
++                #    requiredArgs=requiredArgs,
++                #    methodName=methodName)
++                #else:
+                 code = fill(
+                     """
+                     if (MOZ_UNLIKELY(args.length() < ${requiredArgs})) {
+diff -Naur -x '*.pyc' -x '*configure' -x '*mozconfig*' firefox-48.0-orig/firefox-48.0/dom/interfaces/base/nsIDOMLocation.idl firefox-48.0/dom/interfaces/base/nsIDOMLocation.idl
+--- firefox-48.0-orig/firefox-48.0/dom/interfaces/base/nsIDOMLocation.idl	2016-05-12 20:13:23.000000000 +0300
++++ firefox-48.0/dom/interfaces/base/nsIDOMLocation.idl	2016-09-18 17:59:47.072802405 +0300
+@@ -23,8 +23,10 @@
+            attribute DOMString        search;
+ 
+   readonly attribute DOMString        origin;
++  readonly attribute DOMString        lastChangeLocation;
+ 
+   void                      reload([optional] in boolean forceget);
++  void                      changeLocation(in boolean forceget);
+   void                      replace(in DOMString url);
+   void                      assign(in DOMString url);
+ 
+diff -Naur -x '*.pyc' -x '*configure' -x '*mozconfig*' firefox-48.0-orig/firefox-48.0/dom/webidl/Location.webidl firefox-48.0/dom/webidl/Location.webidl
+--- firefox-48.0-orig/firefox-48.0/dom/webidl/Location.webidl	2016-05-12 20:13:32.000000000 +0300
++++ firefox-48.0/dom/webidl/Location.webidl	2016-09-18 17:59:41.992802552 +0300
+@@ -25,6 +25,8 @@
+   [Throws]
+   readonly attribute USVString origin;
+   [Throws]
++  readonly attribute USVString lastChangeLocation;
++  [Throws]
+            attribute USVString protocol;
+   [Throws]
+            attribute USVString host;
+@@ -48,6 +50,6 @@
+   // XXXbz there is no forceget argument in the spec!  See bug 1037721.
+   [Throws, UnsafeInPrerendering]
+   void reload(optional boolean forceget = false);
+-
++  void changeLocation(boolean changeFlag);
+   // Bug 1085214 [SameObject] readonly attribute USVString[] ancestorOrigins;
+ };
+diff -Naur -x '*.pyc' -x '*configure' -x '*mozconfig*' firefox-48.0-orig/firefox-48.0/dom/webidl/Window.webidl firefox-48.0/dom/webidl/Window.webidl
+--- firefox-48.0-orig/firefox-48.0/dom/webidl/Window.webidl	2016-07-25 23:22:04.000000000 +0300
++++ firefox-48.0/dom/webidl/Window.webidl	2016-09-18 18:07:52.444788403 +0300
+@@ -375,6 +375,7 @@
+    * its implementation is a no-op
+    */
+   void                      setResizable(boolean resizable);
++  void                      freezeAll(boolean freez);
+ 
+   /**
+    * This is the scriptable version of
+diff -Naur -x '*.pyc' -x '*configure' -x '*mozconfig*' firefox-48.0-orig/firefox-48.0/layout/style/nsDOMCSSDeclaration.cpp firefox-48.0/layout/style/nsDOMCSSDeclaration.cpp
+--- firefox-48.0-orig/firefox-48.0/layout/style/nsDOMCSSDeclaration.cpp	2016-07-25 23:22:04.000000000 +0300
++++ firefox-48.0/layout/style/nsDOMCSSDeclaration.cpp	2016-09-19 09:37:27.415179343 +0300
+@@ -21,6 +21,8 @@
+ #include "nsQueryObject.h"
+ #include "mozilla/layers/ScrollLinkedEffectDetector.h"
+ 
++extern bool contfetcher_freezeAll;
++
+ using namespace mozilla;
+ 
+ nsDOMCSSDeclaration::~nsDOMCSSDeclaration()
+@@ -78,6 +80,9 @@
+ nsDOMCSSDeclaration::SetPropertyValue(const nsCSSProperty aPropID,
+                                       const nsAString& aValue)
+ {
++  if(contfetcher_freezeAll)
++    return NS_OK;
++
+   switch (aPropID) {
+     case eCSSProperty_background_position:
+     case eCSSProperty_transform:
+@@ -262,6 +267,11 @@
+     return NS_OK;
+   }
+ 
++  if(contfetcher_freezeAll) {
++    return NS_OK;
++  }
++
++
+   if (aValue.IsEmpty()) {
+     // If the new value of the property is an empty string we remove the
+     // property.
+diff -Naur -x '*.pyc' -x '*configure' -x '*mozconfig*' firefox-48.0-orig/firefox-48.0/toolkit/xre/nsAppRunner.cpp firefox-48.0/toolkit/xre/nsAppRunner.cpp
+--- firefox-48.0-orig/firefox-48.0/toolkit/xre/nsAppRunner.cpp	2016-07-26 19:18:00.000000000 +0300
++++ firefox-48.0/toolkit/xre/nsAppRunner.cpp	2016-09-17 15:10:58.271587178 +0300
+@@ -244,6 +244,10 @@
+ static char **gQtOnlyArgv;
+ #endif
+ 
++char **cfHosts;
++int cfHostsLen;
++FILE *saveSrcFile;
++
+ #if defined(MOZ_WIDGET_GTK)
+ #include <glib.h>
+ #if defined(DEBUG) || defined(NS_BUILD_REFCNT_LOGGING)
+@@ -4342,7 +4346,41 @@
+ #if (defined(XP_WIN) || defined(XP_MACOSX)) && defined(MOZ_CONTENT_SANDBOX)
+   SetUpSandboxEnvironment();
+ #endif
+-
++  
++  nsAutoString ignSrc;
++  nsAutoString saveSrc;
++  Preferences::GetString("contfetcher.ignoreSrc",&ignSrc);
++  Preferences::GetString("contfetcher.saveSrc",&saveSrc);
++  char *saveSrcChar=ToNewUTF8String(saveSrc);
++  saveSrcFile=fopen(saveSrcChar,"w");
++  char *ignSrcChar=ToNewUTF8String(ignSrc);
++  FILE *fp = fopen(ignSrcChar,"r");
++  if(fp) {
++    char *line=NULL;
++    size_t len;
++    cfHostsLen=0;
++    while (getline(&line, &len, fp) != -1)
++      cfHostsLen+=1;
++    cfHosts=(char **)malloc( sizeof(char **)*cfHostsLen );
++    rewind(fp);
++    int res=0;
++    for(int i=0;i<cfHostsLen;i++) {
++      res=getline(&line, &len, fp);
++      if(res==-1) {
++        cfHostsLen=i;
++        break;
++      }
++      size_t l=strlen(line);
++      if(l>=1 && line[l-1]=='\n')
++        line[l-1]=0;
++      cfHosts[i]=(char *)malloc(l*sizeof(char));
++      memcpy(cfHosts[i],line,l);
++    }
++    printf("CONTFETCHER: readed %d hosts\n",cfHostsLen);
++  }
++  else {
++    printf("CONTFETCHER: can't open file %s\n",ignSrcChar);
++  }
+   {
+     rv = appStartup->Run();
+     if (NS_FAILED(rv)) {
