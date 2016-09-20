@@ -2,10 +2,10 @@
 /*jslint white: true */
 /*jslint plusplus: true */
 /*jshint esversion: 6 */
-    
-//
-// let global = node.ownerGlobal.wrappedJSObject
-// Похоже, что это context content
+
+// gBrowser.contentDocument.ownerGlobal.wrappedJSObject Это window object
+// https://wiki.greasespot.net/XPCNativeWrapper
+
 
     var Cc = Components.classes;
     var Ci = Components.interfaces;
@@ -29,6 +29,99 @@ function ajax_expected() {
     }
   }
   return false;
+}
+
+function jquery_defined() {
+  let global = gBrowser.contentDocument.ownerGlobal.wrappedJSObject;
+  return global.jQuery!=undefined;
+}
+
+
+
+
+function replace_ajax() {
+  /*
+   * Эта функция заменяет оригинальный(origAjax) jQuery.ajax метод оберткой этого метода.
+   * При вызове jQuery.ajax будет вызываться обертка, которая, в свою очередь,
+   * будет вызывать origAjax.
+   *
+   * Каждому вызову $.ajax будет сопоставляться уникальный номер. Данный номер будет
+   * записываться в ajax_tasks. После того, как (асинхронный) $.ajax запрос будет
+   * выполнен, номер из ajax_tasks будет удаляться. При помощи данного массива будет
+   * достигаться синхронность асинхронных ajax запросов.
+   * При вызове $.ajax обертка будет извлекать значение глобальной переменной ajax_task,
+   * увеличивать его на 1 и записывать в ajax_tasks.
+   *
+   * Обертка $.ajax во время исполнения будет оборачивать коллбек ajax'a. Таким образом
+   * при обработке ответа от сервера, сначала будет выполнена обертка_коллбека, и далее
+   * оригинальынй коллбек. Обертка_коллбека по завершении будет извлекать из ajax_tasks
+   * свой уникальный номер.
+  */
+  /*TODO how to implement this wrapping without eval?*/
+  gBrowser.contentWindow.wrappedJSObject.eval(`
+    window.ajax_task=0;
+    window.ajax_tasks = [];
+    let origAjax=window.jQuery.ajax;
+    var f = function(origAjax) {
+      /*Обертка для оригинапльного ajax*/
+      return function(url,options) {
+        if(url.dataType == 'jsonp') {
+          let succ_orig = url.success;
+          let curry_succ = function(orig,id) {
+            /* Обертка для коллбека
+              * orig -- Оригинальный callback
+              * id   -- уникальный id данног запроса
+            */
+            return function(...args) {
+              window.freezeAll(false);
+              res=orig(...args);
+              window.freezeAll(true);
+              let idx = window.ajax_tasks.indexOf(id);
+              if(idx==-1) {
+                console.log('CONTFETCHER(ajax callback): id='+id+'not found');
+              }
+              else {
+                window.ajax_tasks.splice(idx, 1);
+              }
+              return res;
+            };
+          }; /*end of wrapped callback*/
+          let uniqId=++window.ajax_task;
+          window.ajax_tasks.push(uniqId);
+          url.success=curry_succ(succ_orig,uniqId);
+          //TODO а если неудача?
+          window.freezeAll(false);
+          result=origAjax(url ,options);
+          window.freezeAll(true);
+          return result;
+        }
+        else {
+          url.async=false;
+          window.freezeAll(false);
+          let res=origAjax(url,options);
+          window.freezeAll(true);
+          return res;
+        }
+      };
+    };
+    window.jQuery.ajax=f(origAjax); /*Замена оригинального ajax*/
+    window.jQuery.ajax.wrapped=true;
+  `);/*end of eval*/
+  console.log('CONTFETCHER: ajax replaced');
+}
+
+function replace_toggle() {
+  gBrowser.contentWindow.wrappedJSObject.eval(`
+    let origFun=window.jQuery.fn.toggle;
+    let wrap = function(orig) {
+      return function(duration,complete) {
+        console.log('toggle called');
+        this.__contfetcher_toggle__=orig;
+        return this.__contfetcher_toggle__(0,complete);
+      };
+    };
+    window.jQuery.fn.toggle=wrap(origFun);
+  `);
 }
 
 function makeAbsPath(path) {
@@ -86,11 +179,14 @@ function getSelfHrefs(type,docum,baseurl,layer) {
   }
 
 
-  let allElems=docum.getElementsByTagName('a'), href;
+  let allElems=docum.getElementsByTagName('a'), href,idx;
   for(let i=0,l=allElems.length;i<l;i++) {
     let elem=allElems[i];
     if( predicate(elem) ) {
       href=makeAbsPath(elem.getAttribute('href'));
+      idx=href.indexOf('#');
+      if(idx>0)
+        href=href.substring(0,idx);
       hrefs.push(href);
     }
   }
@@ -253,6 +349,8 @@ function hashPage(document) {
   buttonsIds.sort( function(a,b) {return a-b; } );
   return [H,num_hrefs,buttonsIds];
 }
+
+
 
 function getIdActiveElements(document) {
   let ids=[];
@@ -577,6 +675,28 @@ function visible(element) {
       this.enabledButtonCond = function(elem) {
         return elem.nodeType==1 && hasEventListeners(elem,'click') && !awayElem(elem) && visible(elem);
       };
+      this.hashPage_lastdata = function(document) {
+        var H=0,num_hrefs=0,buttonsIds=[];
+        allElems=document.getElementsByTagName('*');
+        for(let i=0;i<allElems.length;i++) {
+          let elem=allElems[i];
+          if(elem.nodeType != 1)
+            continue;
+          if( elem.hasAttribute('contfetcher_vis') &&
+              parseInt(elem.getAttribute('contfetcher_vis'))==this.layer) {
+            let href = elem.getAttribute('href');
+            if( !selfHref(gBrowser.contentDocument.location.origin,href) )
+              continue;
+            H+=hashCode(href);
+            num_hrefs+=1;
+          }
+          else if (elem.hasAttribute('contfetcher_id') && visible(elem)) {
+            buttonsIds.push(elem.getAttribute('contfetcher_id'));
+          }
+        }
+        buttonsIds.sort( function(a,b) {return a-b; } );
+        return [H,num_hrefs,buttonsIds];
+      };
       this.addInt = function(elem,key,n) {
         let newWal=parseInt(elem.getAttribute(key))+n;
         elem.setAttribute(key,newWal);
@@ -600,7 +720,7 @@ function visible(element) {
         }
         return curBts;
       };
-      this.pushButton = function(cf_id,label) {
+      this._pushButton = function(cf_id,label) {
         let BUTTON_PUSH_OK="BUTTON_PUSH_OK",
             BUTTON_LOST="BUTTON_LOST";
         this.layer+=1;
@@ -612,62 +732,28 @@ function visible(element) {
         }
         let evt = gBrowser.contentDocument.createEvent("MouseEvents");
         evt.initEvent("click", true, true);
-        let ajaxStor=gBrowser.contentDocument.getElementById('contfetcherAjaxStorage');
-        if(ajaxStor){
-          ajaxStor.remove();
-        }
-        ajaxStor=gBrowser.contentDocument.createElement('meta');
-        ajaxStor.id="contfetcherAjaxStorage";
-        ajaxStor.setAttribute('lastid',0);
-        //if(label) {
-        ajaxStor.setAttribute('label',label);
-        //}
-        gBrowser.contentDocument.head.appendChild(ajaxStor);
         activeElem.dispatchEvent(evt);
         this.addInt(activeElem,'contfetcher_nclick',1);
         return BUTTON_PUSH_OK;
       };
+      this.pushButton = function(cf_id,label) {
+        window.freezeAll(false);
+        let res=this._pushButton(cf_id,label);
+        window.freezeAll(true);
+        return res;
+      };
       this.checkButtonPushed = function(label) {
-        let STORAGE_NOT_EXISTS=-3,
-            LABEL_NOT_MATCH=-2,
-            FINISHED=0,
-            NOT_FINISHED=-1;
-        let ajaxStor=gBrowser.contentDocument.getElementById('contfetcherAjaxStorage');
-        if(!ajaxStor) {
-          console.log('WARNING! function:checkButtonPush reason: element with id=contfetcherAjaxStorage not found');
-          return STORAGE_NOT_EXISTS;
-        }
-        if(ajaxStor.hasAttribute('label') && parseInt(ajaxStor.getAttribute('label'))!=label) {
-          return LABEL_NOT_MATCH;
-        }
-        let childs=ajaxStor.childNodes;
-        let allFin=true;
-        for(let k=0;k<childs.length;k++) {
-          if(childs[k].nodeType==1 && childs[k].getAttribute('status')!="finished") {
-            allFin=false;
-            break;
-          }
-        }
-        if(allFin)
+        let LABEL_NOT_MATCH=-2,FINISHED=0,NOT_FINISHED=-1;
+        let global = gBrowser.contentDocument.ownerGlobal.wrappedJSObject,
+            at = global.ajax_tasks,len;
+        if(!at)
+          return FINISHED;
+        len=at.length;
+        if(len==0)
           return FINISHED;
         else
           return NOT_FINISHED;
       };
-      /*
-      this.getElemFeatures = function(elem) {
-              var o = {
-                link:   undefined,
-                tag:    elem.localName,
-                text:   elem.text,
-                onclick:elem.onclick,
-                callbacks:[],
-                href:   elem.href,
-                color:  elem.style.color
-              };
-
-      };
-      */
-      
       this.addNewButton = function(x) {
         this.buttons.push(x);
       };
@@ -708,8 +794,9 @@ function visible(element) {
         //  6. font-color
         //  7. font-size
         //  8. font-type
+        let txt=elem.textContent.replace(/\n/g," ").replace(/\s+/g," ").replace(/^ */,"").replace(/ *$/,"");
         let feat= {
-          text:elem.textContent,
+          text:txt,
           tagName:elem.tagName
         };
         
@@ -727,7 +814,7 @@ function visible(element) {
         }
         this.cnt=max_cf_id+1;
       };
-      this.enumerateElements = function(cf_id,layer) {
+      this._enumerateElements = function(cf_id,layer) {
         let activeElem;
         if(cf_id===undefined) {
           cf_id = this.last_pushed_button;
@@ -746,6 +833,17 @@ function visible(element) {
         }
         for(let i=0;i<allNodes.length;i++) {
           elem=allNodes[i];
+          /*
+          if(elem.localName=="a" && elem.hasAttribute('href')) {
+            let vis=visible(elem), hasAttVis=elem.hasAttribute('contfetcher_vis');
+            if(vis && !hasAttVis) {
+              elem.setAttribute('contfetcher_vis',this.layer);
+            }
+            else if(!vis && hasAttVis){
+              elem.removeAttribute('contfetcher_vis');
+            }
+          }
+          */
           if( !elem.hasAttribute('contfetcher_layer') ) {
             elem.setAttribute('contfetcher_layer',layer);
             elem.setAttribute('contfetcher_parId',cf_id);
@@ -861,6 +959,12 @@ function visible(element) {
         }
         return newActiveElems;
       };
+      this.enumerateElements = function(cf_id,layer) {
+        window.freezeAll(false);
+        let res=this._enumerateElements(cf_id,layer);
+        window.freezeAll(true);
+        return res;
+      }
       this.getNextButton = function() {
         
       };
