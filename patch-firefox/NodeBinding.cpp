@@ -18,8 +18,7 @@
 #include "nsINodeList.h"
 #include "nsIPrincipal.h"
 #include "nsIURI.h"
-
-extern bool contfetcher_freezeAll;
+#include "contfetcher.h"
 
 namespace mozilla {
 namespace dom {
@@ -460,9 +459,6 @@ get_nodeValue(JSContext* cx, JS::Handle<JSObject*> obj, nsINode* self, JSJitGett
 static bool
 set_nodeValue(JSContext* cx, JS::Handle<JSObject*> obj, nsINode* self, JSJitSetterCallArgs args)
 {
-  if(contfetcher_freezeAll && self->NodeType() == nsIDOMNode::ELEMENT_NODE && !self->LocalName().EqualsASCII("script"))
-    return true;
-
   binding_detail::FakeString arg0;
   if (!ConvertJSValueToString(cx, args[0], eNull, eNull, arg0)) {
     return false;
@@ -531,9 +527,6 @@ get_textContent(JSContext* cx, JS::Handle<JSObject*> obj, nsINode* self, JSJitGe
 static bool
 set_textContent(JSContext* cx, JS::Handle<JSObject*> obj, nsINode* self, JSJitSetterCallArgs args)
 {
-  if(contfetcher_freezeAll && self->NodeType() == nsIDOMNode::ELEMENT_NODE && !self->LocalName().EqualsASCII("script"))
-    return true;
-
   binding_detail::FakeString arg0;
   if (!ConvertJSValueToString(cx, args[0], eNull, eNull, arg0)) {
     return false;
@@ -589,8 +582,6 @@ insertBefore(JSContext* cx, JS::Handle<JSObject*> obj, nsINode* self, const JSJi
   if (MOZ_UNLIKELY(args.length() < 2)) {
     return ThrowErrorMessage(cx, MSG_MISSING_ARGUMENTS, "Node.insertBefore");
   }
-  if(contfetcher_freezeAll && self->NodeType() == nsIDOMNode::ELEMENT_NODE && !self->LocalName().EqualsASCII("script"))
-    return true;
   NonNull<nsINode> arg0;
   if (args[0].isObject()) {
     {
@@ -620,6 +611,7 @@ insertBefore(JSContext* cx, JS::Handle<JSObject*> obj, nsINode* self, const JSJi
     return false;
   }
   ErrorResult rv;
+  CONTFETCHER_PREVENT_ATTRIB(&NonNullHelper(arg0));
   auto result(StrongOrRawPtr<nsINode>(self->InsertBefore(NonNullHelper(arg0), Constify(arg1), rv)));
   if (MOZ_UNLIKELY(rv.MaybeSetPendingException(cx))) {
     return false;
@@ -656,8 +648,6 @@ appendChild(JSContext* cx, JS::Handle<JSObject*> obj, nsINode* self, const JSJit
   if (MOZ_UNLIKELY(args.length() < 1)) {
     return ThrowErrorMessage(cx, MSG_MISSING_ARGUMENTS, "Node.appendChild");
   }
-  if(contfetcher_freezeAll && self->NodeType() == nsIDOMNode::ELEMENT_NODE && !self->LocalName().EqualsASCII("script"))
-    return true;
   NonNull<nsINode> arg0;
   if (args[0].isObject()) {
     {
@@ -672,6 +662,7 @@ appendChild(JSContext* cx, JS::Handle<JSObject*> obj, nsINode* self, const JSJit
     return false;
   }
   ErrorResult rv;
+  CONTFETCHER_PREVENT_ATTRIB(&NonNullHelper(arg0));
   auto result(StrongOrRawPtr<nsINode>(self->AppendChild(NonNullHelper(arg0), rv)));
   if (MOZ_UNLIKELY(rv.MaybeSetPendingException(cx))) {
     return false;
@@ -708,8 +699,6 @@ replaceChild(JSContext* cx, JS::Handle<JSObject*> obj, nsINode* self, const JSJi
   if (MOZ_UNLIKELY(args.length() < 2)) {
     return ThrowErrorMessage(cx, MSG_MISSING_ARGUMENTS, "Node.replaceChild");
   }
-  if(contfetcher_freezeAll && self->NodeType() == nsIDOMNode::ELEMENT_NODE && !self->LocalName().EqualsASCII("script"))
-    return true;
   NonNull<nsINode> arg0;
   if (args[0].isObject()) {
     {
@@ -737,6 +726,7 @@ replaceChild(JSContext* cx, JS::Handle<JSObject*> obj, nsINode* self, const JSJi
     return false;
   }
   ErrorResult rv;
+  CONTFETCHER_PREVENT_ATTRIB(&NonNullHelper(arg0));
   auto result(StrongOrRawPtr<nsINode>(self->ReplaceChild(NonNullHelper(arg0), NonNullHelper(arg1), rv)));
   if (MOZ_UNLIKELY(rv.MaybeSetPendingException(cx))) {
     return false;
@@ -773,8 +763,6 @@ removeChild(JSContext* cx, JS::Handle<JSObject*> obj, nsINode* self, const JSJit
   if (MOZ_UNLIKELY(args.length() < 1)) {
     return ThrowErrorMessage(cx, MSG_MISSING_ARGUMENTS, "Node.removeChild");
   }
-  if(contfetcher_freezeAll && self->NodeType() == nsIDOMNode::ELEMENT_NODE && !self->LocalName().EqualsASCII("script"))
-    return true;
   NonNull<nsINode> arg0;
   if (args[0].isObject()) {
     {
@@ -789,6 +777,7 @@ removeChild(JSContext* cx, JS::Handle<JSObject*> obj, nsINode* self, const JSJit
     return false;
   }
   ErrorResult rv;
+  CONTFETCHER_PREVENT_ATTRIB(&NonNullHelper(arg0));
   auto result(StrongOrRawPtr<nsINode>(self->RemoveChild(NonNullHelper(arg0), rv)));
   if (MOZ_UNLIKELY(rv.MaybeSetPendingException(cx))) {
     return false;
@@ -1205,9 +1194,6 @@ static_assert(0 < 1, "There is no slot for us");
 static bool
 setUserData(JSContext* cx, JS::Handle<JSObject*> obj, nsINode* self, const JSJitMethodCallArgs& args)
 {
-  if(contfetcher_freezeAll && self->NodeType() == nsIDOMNode::ELEMENT_NODE && !self->LocalName().EqualsASCII("script"))
-    return true;
-
   if (MOZ_UNLIKELY(args.length() < 2)) {
     return ThrowErrorMessage(cx, MSG_MISSING_ARGUMENTS, "Node.setUserData");
   }
@@ -1370,17 +1356,17 @@ getBoundMutationObservers(JSContext* cx, JS::Handle<JSObject*> obj, nsINode* sel
   // Scope for 'tmp'
   {
     JS::Rooted<JS::Value> tmp(cx);
-    for (uint32_t sequenceIdx0 = 0; sequenceIdx0 < length; ++sequenceIdx0) {
+    for (uint32_t sequenceIdx24 = 0; sequenceIdx24 < length; ++sequenceIdx24) {
       // Control block to let us common up the JS_DefineElement calls when there
       // are different ways to succeed at wrapping the object.
       do {
-        if (!GetOrCreateDOMReflector(cx, result[sequenceIdx0], &tmp)) {
+        if (!GetOrCreateDOMReflector(cx, result[sequenceIdx24], &tmp)) {
           MOZ_ASSERT(true || JS_IsExceptionPending(cx));
           return false;
         }
         break;
       } while (0);
-      if (!JS_DefineElement(cx, returnArray, sequenceIdx0, tmp,
+      if (!JS_DefineElement(cx, returnArray, sequenceIdx24, tmp,
                             JSPROP_ENUMERATE)) {
         return false;
       }
