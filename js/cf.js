@@ -3,21 +3,101 @@
 /*jslint plusplus: true */
 /*jshint esversion: 6 */
 
-// gBrowser.contentDocument.ownerGlobal.wrappedJSObject Это window object
+// gBrowser.contentWindow.wrappedJSObject Это window object
 // https://wiki.greasespot.net/XPCNativeWrapper
 
 
-    var Cc = Components.classes;
-    var Ci = Components.interfaces;
-    //var document = gBrowser.contentDocument;
-    var elService = Components.classes["@mozilla.org/eventlistenerservice;1"].getService(Ci.nsIEventListenerService);
-    var console = (Cu.import("resource://gre/modules/Console.jsm", {})).console;
-    let { require } = Cu.import("resource://devtools/shared/Loader.jsm", {});
-    //let inspector = require("devtools/server/actors/inspector");
-    const {EventParsers} = require("devtools/shared/event-parsers");
-    var ioService = Components.classes["@mozilla.org/network/io-service;1"]
-                          .getService(Components.interfaces.nsIIOService);
-    //var all =  document.getElementsByTagName("*");
+var Cc = Components.classes;
+var Ci = Components.interfaces;
+var elService = Components.classes["@mozilla.org/eventlistenerservice;1"].getService(Ci.nsIEventListenerService);
+var console = (Cu.import("resource://gre/modules/Console.jsm", {})).console;
+let { require } = Cu.import("resource://devtools/shared/Loader.jsm", {});
+const {EventParsers} = require("devtools/shared/event-parsers");
+var ioService = Components.classes["@mozilla.org/network/io-service;1"].getService(Components.interfaces.nsIIOService);
+var { modelFor } = require("sdk/model/core");
+var { viewFor } = require("sdk/view/core");
+var tabs = require("sdk/tabs");
+var tab_utils = require("sdk/tabs/utils");
+var browser;
+
+
+function compareListFeat(f1,f2) {
+  if(f1.length==f2.length) {
+    for(let i=0,l=f1.length;i<l;i++) {
+      if(f1[i]!=f2[i])
+        return false;
+    }
+    return true;
+  }
+  else {
+    return false;
+  }
+}
+
+function computeListFeat(node) {
+  return [node.localName,node.className];
+}
+
+function eqNeigh(node) {
+  l=node.previousSibling;
+  r=node.nextSibling;
+  if(l && r) {
+    lf=computeListFeat(l);
+    rf=computeListFeat(r);
+    sf=computeListFeat(node);
+    if( compareListFeat(lf,sf) && compareListFeat(sf,rf) )
+      return true;
+    else
+      return false;
+  }
+  else {
+    return false;
+  }
+}
+
+function computeListLen(node,pattern) {
+  let cnt=0,
+      childs=node.childNodes,
+      ch;
+  for(let i=0,l=childs.length;i<l;i++) {
+    ch=childs[i];
+    if(ch.nodeType!=1)
+      continue;
+    if(pattern(ch))
+      cnt+=1;
+  }
+  return cnt;
+}
+
+var growListThreshold=2;
+function isGrowingList(node) {
+  if(node.hasAttribute('cfN0') && node.hasAttribute('cfN1')) {
+    let n1=parseInt(node.getAttribute('cfN0')),
+        n2=parseInt(node.getAttribute('cfN1'));
+    n1=n1>0?n1:1;
+    if(n2/n1 > growListThreshold)
+      return true;
+    else
+      return false;
+  }
+  else {
+    return false;
+  }
+}
+
+function pruneList(node,pattern) {
+  let childs=node.childNodes,ch,rmCh=[];
+  for(let i=0,l=childs.length;i<l;i++) {
+    ch=childs[i];
+    if(ch.nodeType!=1)
+      continue;
+    if(pattern(ch))
+      rmCh.push(ch);
+  }
+  for(let i=0,l=rmCh.length;i<l;i++) {
+    rmCh[i].remove();
+  }
+}
 
 
 function ajax_expected() {
@@ -32,8 +112,8 @@ function ajax_expected() {
 }
 
 function jquery_defined() {
-  let global = gBrowser.contentDocument.ownerGlobal.wrappedJSObject;
-  return global.jQuery!=undefined;
+  let global = gBrowser.contentWindow.wrappedJSObject;
+  return global.jQuery!==undefined;
 }
 
 
@@ -59,13 +139,12 @@ function replace_ajax() {
   */
   /*TODO how to implement this wrapping without eval?*/
   gBrowser.contentWindow.wrappedJSObject.eval(`
-    window.ajax_task=0;
-    window.ajax_tasks = [];
     let origAjax=window.jQuery.ajax;
+    document.cfAsyncTaskErase();
     var f = function(origAjax) {
       /*Обертка для оригинапльного ajax*/
       return function(url,options) {
-        if(url.dataType == 'jsonp') {
+        if( true /*url.dataType == 'jsonp'*/) {
           let succ_orig = url.success;
           let curry_succ = function(orig,id) {
             /* Обертка для коллбека
@@ -73,33 +152,30 @@ function replace_ajax() {
               * id   -- уникальный id данног запроса
             */
             return function(...args) {
-              window.freezeAll(false);
+              let oldVal=document.cfFreezeDoc;
+              document.cfFreezeDoc=false;
               res=orig(...args);
-              window.freezeAll(true);
-              let idx = window.ajax_tasks.indexOf(id);
-              if(idx==-1) {
-                console.log('CONTFETCHER(ajax callback): id='+id+'not found');
-              }
-              else {
-                window.ajax_tasks.splice(idx, 1);
-              }
+              document.cfFreezeDoc=oldVal;
+              document.cfAsyncTaskDone(id);
               return res;
             };
           }; /*end of wrapped callback*/
-          let uniqId=++window.ajax_task;
-          window.ajax_tasks.push(uniqId);
+          let uniqId=document.cfAsyncTaskRegister();
+          console.log('uniqId', uniqId);
           url.success=curry_succ(succ_orig,uniqId);
           //TODO а если неудача?
-          window.freezeAll(false);
+          let oldVal=document.cfFreezeDoc;
+          document.cfFreezeDoc=false;
           result=origAjax(url ,options);
-          window.freezeAll(true);
+          document.cfFreezeDoc=oldVal;
           return result;
         }
-        else {
+        else {/*unused*/
           url.async=false;
-          window.freezeAll(false);
+          let oldVal=document.cfFreezeDoc;
+          document.cfFreezeDoc=false;
           let res=origAjax(url,options);
-          window.freezeAll(true);
+          document.cfFreezeDoc=oldVal;
           return res;
         }
       };
@@ -157,13 +233,13 @@ function getSelfHrefs(type,docum,baseurl,layer) {
   else if( type=="allVisible" )
     predicate = elem=>{ 
       return elem.hasAttribute('href') && selfHref(baseurl,elem.getAttribute('href')) &&
-      visible(elem)
+      visible(elem);
     };
   else if(type=="layer") {
     predicate = elem=>{
       return elem.hasAttribute('href') && selfHref(baseurl,elem.getAttribute('href')) &&
       elem.hasAttribute('contfetcher_layer') &&
-      elem.getAttribute('contfetcher_layer')==layer
+      elem.getAttribute('contfetcher_layer')==layer;
     };
   }
   else if(type=="layerVisible") {
@@ -171,7 +247,7 @@ function getSelfHrefs(type,docum,baseurl,layer) {
       return elem.hasAttribute('href') && selfHref(baseurl,elem.getAttribute('href')) &&
       visible(elem) &&
       elem.hasAttribute('contfetcher_layer') &&
-      elem.getAttribute('contfetcher_layer')==layer
+      elem.getAttribute('contfetcher_layer')==layer;
     };
   }
   else {
@@ -244,7 +320,7 @@ function enumDebugId(document) {
 
 function getDebugId(id,document) {
   if(!document)
-    document=gBrowser.contentDocument
+    document=gBrowser.contentDocument;
   let allNodes = document.getElementsByTagName('*');
   let elem;
   for(let i=0;i<allNodes.length;i++) {
@@ -342,7 +418,7 @@ function hashPage(document) {
       H+=hashCode(href);
       num_hrefs+=1;
     }
-    else if (elem.hasAttribute('contfetcher_id') && visible(elem)) {
+    else if (!awayElem(elem) && elem.hasAttribute('contfetcher_id') && visible(elem)) {
       buttonsIds.push(elem.getAttribute('contfetcher_id'));
     }
   }
@@ -578,14 +654,15 @@ function on_top(r,element) {
 }
 
 function visible(element) {
-  var de=gBrowser.contentDocument.documentElement;
+  var de=gBrowser.contentDocument.documentElement,
+      r;
   if (!element || element.nodeType!=1)
     return false;
   if (element.offsetWidth === 0 || element.offsetHeight === 0)
     return false;
   //var height = gBrowser.contentDocument.documentElement.clientHeight,
   let rects = element.getClientRects();
-  if (rects.length==0)
+  if (rects.length===0)
     return false;
   r=rects[0];
   //goto first rect
@@ -594,7 +671,7 @@ function visible(element) {
   de.scrollTo(x,y);
   rects = element.getClientRects(); /*update rect's coordinates*/
   for (var i = 0, l = rects.length; i < l; i++) {
-    var r = rects[i];
+    r = rects[i];
     if (on_top(r,element)) 
       return true;
   }
@@ -619,14 +696,6 @@ function visible(element) {
             return true;
           else
             return false;
-          /*
-          if( (href=="" || (href.length>0 && href[0]=='#')) ||
-              ()
-            )
-            return false;
-          else
-            return true;
-          */
         }
         else {
           return false;
@@ -737,19 +806,15 @@ function visible(element) {
         return BUTTON_PUSH_OK;
       };
       this.pushButton = function(cf_id,label) {
-        window.freezeAll(false);
+        let oldVal=gBrowser.contentDocument.cfFreezeDoc;
+        gBrowser.contentDocument.cfFreezeDoc=false;
         let res=this._pushButton(cf_id,label);
-        window.freezeAll(true);
+        gBrowser.contentDocument.cfFreezeDoc=oldVal;
         return res;
       };
       this.checkButtonPushed = function(label) {
-        let LABEL_NOT_MATCH=-2,FINISHED=0,NOT_FINISHED=-1;
-        let global = gBrowser.contentDocument.ownerGlobal.wrappedJSObject,
-            at = global.ajax_tasks,len;
-        if(!at)
-          return FINISHED;
-        len=at.length;
-        if(len==0)
+        let FINISHED=0,NOT_FINISHED=-1;
+        if(gBrowser.contentDocument.cfAsyncTaskIsCompleteAll())
           return FINISHED;
         else
           return NOT_FINISHED;
@@ -814,6 +879,20 @@ function visible(element) {
         }
         this.cnt=max_cf_id+1;
       };
+      this.pruneTree = function() {
+        nodes=[gBrowser.contentDocument.body];
+        while(nodes.length>0) {
+          node=nodes.shift();
+          if(isGrowingList(node)) {
+            console.log('grown list detected');
+            pruneList(node,eqNeigh);
+          }
+          chs=node.childNodes;
+          for(let i=0,l=chs.length;i<l;i++)
+            if(chs[i].nodeType==1)
+              nodes.push(chs[i]);
+        }
+      };
       this._enumerateElements = function(cf_id,layer) {
         let activeElem;
         if(cf_id===undefined) {
@@ -831,19 +910,13 @@ function visible(element) {
         if(layer===undefined) {
           layer=this.layer;
         }
-        for(let i=0;i<allNodes.length;i++) {
+        for(let i=0,l=allNodes.length;i<l;i++) {
           elem=allNodes[i];
-          /*
-          if(elem.localName=="a" && elem.hasAttribute('href')) {
-            let vis=visible(elem), hasAttVis=elem.hasAttribute('contfetcher_vis');
-            if(vis && !hasAttVis) {
-              elem.setAttribute('contfetcher_vis',this.layer);
-            }
-            else if(!vis && hasAttVis){
-              elem.removeAttribute('contfetcher_vis');
-            }
-          }
-          */
+          let ll=computeListLen(elem,eqNeigh);
+          if(this.layer===0)
+            elem.setAttribute('cfN0',ll);
+          else
+            elem.setAttribute('cfN1',ll);
           if( !elem.hasAttribute('contfetcher_layer') ) {
             elem.setAttribute('contfetcher_layer',layer);
             elem.setAttribute('contfetcher_parId',cf_id);
@@ -960,11 +1033,12 @@ function visible(element) {
         return newActiveElems;
       };
       this.enumerateElements = function(cf_id,layer) {
-        window.freezeAll(false);
+        let oldVal=gBrowser.contentDocument.cfFreezeDoc;
+        gBrowser.contentDocument.cfFreezeDoc=false;
         let res=this._enumerateElements(cf_id,layer);
-        window.freezeAll(true);
+        gBrowser.contentDocument.cfFreezeDoc=oldVal;
         return res;
-      }
+      };
       this.getNextButton = function() {
         
       };
@@ -976,26 +1050,13 @@ function visible(element) {
       this.enumerateElements(0);
 }
 
-    //var curPage=contfetcherPage(document);
-/*
-    activeElems=[];
-    //page.Init(document);
-    //page.enumerateElements(0);
-    //page.pushButton(5);
-    //page.pushButton(9);
-    //page.enumerateElements(5);
-    //activeElems=page.lastActiveElems;
-    
-    xplist=[];
-    //activeElems=enumerateButtons();
-    for(let i=0;i<activeElems.length;i++) {
-      //console.log('contfetcher='+activeElems[i].getAttribute('contfetcher'));
-      var xp=getXpath(document,activeElems[i]);
-      //console.log(xp);
-      //console.log(getXpathSimple(document,activeElems[i])+'\n')
-      xplist.push(xp)
-    }
-    
-
-    return xplist;
-*/
+function cfOpenTabAndInit() {
+  //Предполагаем, что последняя вкладка браузера пустая.
+  if(tabs.length===0) {
+    //браузер был без вкладки? добавляем.
+    tabs.open('about:blank');
+  }
+  tabs.open('about:blank'); //открываем пустую вкладку
+  let len=tabs.length;
+  browser = tab_utils.getBrowserForTab(viewFor(tabs[len-2]));
+}
