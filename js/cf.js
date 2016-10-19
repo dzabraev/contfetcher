@@ -1,24 +1,21 @@
-/*global Components, gBrowser, Cu, XPathResult*/
+/*global Components, browser, Cu, XPathResult*/
 /*jslint white: true */
 /*jslint plusplus: true */
 /*jshint esversion: 6 */
 
-// gBrowser.contentWindow.wrappedJSObject Это window object
+// browser.contentWindow.wrappedJSObject Это window object
 // https://wiki.greasespot.net/XPCNativeWrapper
 
-
+/*
 var Cc = Components.classes;
 var Ci = Components.interfaces;
 var elService = Components.classes["@mozilla.org/eventlistenerservice;1"].getService(Ci.nsIEventListenerService);
 var console = (Cu.import("resource://gre/modules/Console.jsm", {})).console;
-let { require } = Cu.import("resource://devtools/shared/Loader.jsm", {});
+var { require } = Cu.import("resource://devtools/shared/Loader.jsm", {});
 const {EventParsers} = require("devtools/shared/event-parsers");
 var ioService = Components.classes["@mozilla.org/network/io-service;1"].getService(Components.interfaces.nsIIOService);
-var { modelFor } = require("sdk/model/core");
-var { viewFor } = require("sdk/view/core");
-var tabs = require("sdk/tabs");
-var tab_utils = require("sdk/tabs/utils");
-var browser;
+*/
+
 
 
 function compareListFeat(f1,f2) {
@@ -101,7 +98,7 @@ function pruneList(node,pattern) {
 
 
 function ajax_expected() {
-  all=gBrowser.contentDocument.head.getElementsByTagName('script');
+  all=browser.contentDocument.head.getElementsByTagName('script');
   for(let i=0,l=all.length;i<l;i++) {
     script=all[i];
     if(script.hasAttribute('src') && script.getAttribute('src').toLowerCase().search('jquery')!=-1) {
@@ -112,7 +109,7 @@ function ajax_expected() {
 }
 
 function jquery_defined() {
-  let global = gBrowser.contentWindow.wrappedJSObject;
+  let global = browser.contentWindow.wrappedJSObject;
   return global.jQuery!==undefined;
 }
 
@@ -138,7 +135,7 @@ function replace_ajax() {
    * свой уникальный номер.
   */
   /*TODO how to implement this wrapping without eval?*/
-  gBrowser.contentWindow.wrappedJSObject.eval(`
+  browser.contentWindow.wrappedJSObject.eval(`
     let origAjax=window.jQuery.ajax;
     document.cfAsyncTaskErase();
     var f = function(origAjax) {
@@ -187,7 +184,7 @@ function replace_ajax() {
 }
 
 function replace_toggle() {
-  gBrowser.contentWindow.wrappedJSObject.eval(`
+  browser.contentWindow.wrappedJSObject.eval(`
     let origFun=window.jQuery.fn.toggle;
     let wrap = function(orig) {
       return function(duration,complete) {
@@ -208,15 +205,15 @@ function makeAbsPath(path) {
     return path;
 */
   /* http://stackoverflow.com/questions/8055763/get-absolute-url-from-relative-url-in-firefox-extension */
-  let baseURI = ioService.newURI(gBrowser.contentDocument.location.origin, null, null);
+  let baseURI = ioService.newURI(browser.contentDocument.location.origin, null, null);
   let absURI  = ioService.newURI(path, null, baseURI);
   return absURI.spec;
 }
 
 function getSelfHrefs(type,docum,baseurl,layer) {
   if(!docum) {
-    if(gBrowser && gBrowser.contentDocument)
-      docum=gBrowser.contentDocument;
+    if(browser.contentDocument)
+      docum=browser.contentDocument;
     else {
       docum=document;
     }
@@ -303,7 +300,7 @@ function getEventListeners(node) {
 
 function enumDebugId(document) {
   if(!document)
-    document=gBrowser.contentDocument;
+    document=browser.contentDocument;
   let allNodes = document.getElementsByTagName('*');
   let elem;
   let cnt=0;
@@ -320,7 +317,7 @@ function enumDebugId(document) {
 
 function getDebugId(id,document) {
   if(!document)
-    document=gBrowser.contentDocument;
+    document=browser.contentDocument;
   let allNodes = document.getElementsByTagName('*');
   let elem;
   for(let i=0;i<allNodes.length;i++) {
@@ -352,7 +349,7 @@ function getDebugId(id,document) {
 
 
   function getButtonsDescr() {
-        let allNodes = gBrowser.contentDocument.getElementsByTagName('*');
+        let allNodes = browser.contentDocument.getElementsByTagName('*');
         let elem;
         let descrs=[];
         for(let i=0;i<allNodes.length;i++) {
@@ -413,7 +410,7 @@ function hashPage(document) {
       continue;
     if( awayElem(elem) && visible(elem) ) {
       let href = elem.getAttribute('href');
-      if( !selfHref(gBrowser.contentDocument.location.origin,href) )
+      if( !selfHref(browser.contentDocument.location.origin,href) )
         continue;
       H+=hashCode(href);
       num_hrefs+=1;
@@ -650,17 +647,17 @@ function deepCompare () {
 
 function on_top(r,element) {
   let x = (r.left + r.right)/2, y = (r.top + r.bottom)/2;
-  return gBrowser.contentDocument.elementFromPoint(x, y) === element;
+  return browser.contentDocument.elementFromPoint(x, y) === element;
 }
 
 function visible(element) {
-  var de=gBrowser.contentDocument.documentElement,
+  var de=browser.contentDocument.documentElement,
       r;
   if (!element || element.nodeType!=1)
     return false;
   if (element.offsetWidth === 0 || element.offsetHeight === 0)
     return false;
-  //var height = gBrowser.contentDocument.documentElement.clientHeight,
+  //var height = browser.contentDocument.documentElement.clientHeight,
   let rects = element.getClientRects();
   if (rects.length===0)
     return false;
@@ -735,7 +732,7 @@ function visible(element) {
       */
       this.cnt=1;
       this.layer=0;
-      //gBrowser.contentDocument=document;
+      //browser.contentDocument=document;
       this.lastActiveElems=[];
       this.hrefs=new Set();
       this.sawHrefs=new Set(); /*посмотренные гиперссылки*/
@@ -754,7 +751,7 @@ function visible(element) {
           if( elem.hasAttribute('contfetcher_vis') &&
               parseInt(elem.getAttribute('contfetcher_vis'))==this.layer) {
             let href = elem.getAttribute('href');
-            if( !selfHref(gBrowser.contentDocument.location.origin,href) )
+            if( !selfHref(browser.contentDocument.location.origin,href) )
               continue;
             H+=hashCode(href);
             num_hrefs+=1;
@@ -771,7 +768,7 @@ function visible(element) {
         elem.setAttribute(key,newWal);
       };
       this.getCurrentButtons = function() {
-        let allNodes = gBrowser.contentDocument.getElementsByTagName('*');
+        let allNodes = browser.contentDocument.getElementsByTagName('*');
         let elem;
         let curBts=[];
         let allBts=this.buttons,allBtsL=allBts.length;
@@ -794,27 +791,27 @@ function visible(element) {
             BUTTON_LOST="BUTTON_LOST";
         this.layer+=1;
         this.last_pushed_button=cf_id;
-        let activeElem=getElementByCfId(gBrowser.contentDocument,cf_id,false);
+        let activeElem=getElementByCfId(browser.contentDocument,cf_id,false);
         if(!activeElem) {
           /*похоже, что кнопка пропала*/
           return BUTTON_LOST;
         }
-        let evt = gBrowser.contentDocument.createEvent("MouseEvents");
+        let evt = browser.contentDocument.createEvent("MouseEvents");
         evt.initEvent("click", true, true);
         activeElem.dispatchEvent(evt);
         this.addInt(activeElem,'contfetcher_nclick',1);
         return BUTTON_PUSH_OK;
       };
       this.pushButton = function(cf_id,label) {
-        let oldVal=gBrowser.contentDocument.cfFreezeDoc;
-        gBrowser.contentDocument.cfFreezeDoc=false;
+        let oldVal=browser.contentDocument.cfFreezeDoc;
+        browser.contentDocument.cfFreezeDoc=false;
         let res=this._pushButton(cf_id,label);
-        gBrowser.contentDocument.cfFreezeDoc=oldVal;
+        browser.contentDocument.cfFreezeDoc=oldVal;
         return res;
       };
       this.checkButtonPushed = function(label) {
         let FINISHED=0,NOT_FINISHED=-1;
-        if(gBrowser.contentDocument.cfAsyncTaskIsCompleteAll())
+        if(browser.contentDocument.cfAsyncTaskIsCompleteAll())
           return FINISHED;
         else
           return NOT_FINISHED;
@@ -880,7 +877,7 @@ function visible(element) {
         this.cnt=max_cf_id+1;
       };
       this.pruneTree = function() {
-        nodes=[gBrowser.contentDocument.body];
+        nodes=[browser.contentDocument.body];
         while(nodes.length>0) {
           node=nodes.shift();
           if(isGrowingList(node)) {
@@ -905,7 +902,7 @@ function visible(element) {
         let nl=0;
         let newnl=0;
         let newActiveElems=[];
-        let allNodes = gBrowser.contentDocument.getElementsByTagName('*');
+        let allNodes = browser.contentDocument.getElementsByTagName('*');
         let elem;
         if(layer===undefined) {
           layer=this.layer;
@@ -952,11 +949,11 @@ function visible(element) {
                   А именно, elem имеет такие же признаки, как и какая-то
                   другая кнопка, при этом другая кнопка существует сейчас.
                 */
-                let colliz=getElementByCfId(gBrowser.contentDocument,buttonId,false);
+                let colliz=getElementByCfId(browser.contentDocument,buttonId,false);
                 if(colliz) {
                   //console.log('semms tobe this same buttons');
-                  //console.log('collision new',getXpath(gBrowser.contentDocument,elem));
-                  //console.log('collision old',getXpath(gBrowser.contentDocument,colliz));
+                  //console.log('collision new',getXpath(browser.contentDocument,elem));
+                  //console.log('collision old',getXpath(browser.contentDocument,colliz));
                   continue;
                   //throw "collision: "; //+JSON.stringify(bf);
                 }
@@ -994,7 +991,7 @@ function visible(element) {
             elem.setAttribute('contfetcher_status','disabled');
           }
         }
-        activeElem=getElementByCfId(gBrowser.contentDocument,cf_id,false);
+        activeElem=getElementByCfId(browser.contentDocument,cf_id,false);
         if(activeElem) {
           if(newnl===0) {
             this.addInt(activeElem,'contfetcher_dry',1);
@@ -1033,10 +1030,10 @@ function visible(element) {
         return newActiveElems;
       };
       this.enumerateElements = function(cf_id,layer) {
-        let oldVal=gBrowser.contentDocument.cfFreezeDoc;
-        gBrowser.contentDocument.cfFreezeDoc=false;
+        let oldVal=browser.contentDocument.cfFreezeDoc;
+        browser.contentDocument.cfFreezeDoc=false;
         let res=this._enumerateElements(cf_id,layer);
-        gBrowser.contentDocument.cfFreezeDoc=oldVal;
+        browser.contentDocument.cfFreezeDoc=oldVal;
         return res;
       };
       this.getNextButton = function() {
@@ -1050,13 +1047,10 @@ function visible(element) {
       this.enumerateElements(0);
 }
 
-function cfOpenTabAndInit() {
-  //Предполагаем, что последняя вкладка браузера пустая.
-  if(tabs.length===0) {
-    //браузер был без вкладки? добавляем.
-    tabs.open('about:blank');
-  }
-  tabs.open('about:blank'); //открываем пустую вкладку
-  let len=tabs.length;
-  browser = tab_utils.getBrowserForTab(viewFor(tabs[len-2]));
+/*
+function closeTab(idx) {
+  gBrowser.curTabs[idx].close()
 }
+*/
+
+

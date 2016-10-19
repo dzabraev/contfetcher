@@ -112,3 +112,10 @@ share.yandex.net
 utarget.ru
 vk.com
 yandex.st
+
+dmg.digitaltarget.ru
+sb.scorecardresearch.com
+smi2.ru
+static.smi2.net
+target.smi2.net
+www.googletagmanager.com
