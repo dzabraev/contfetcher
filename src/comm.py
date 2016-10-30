@@ -3,7 +3,7 @@ import os
 import ast
 import sys
 
-communication_verbose=1
+communication_verbose=0
 
 def commlog(msg):
   sys.stdout.write(msg)

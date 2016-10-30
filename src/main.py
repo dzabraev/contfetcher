@@ -10,6 +10,7 @@ import signal
 import select
 import db
 import re
+import hashlib
 
 import traverse_url
 import comm
@@ -264,7 +265,7 @@ def url_exists(table_name,url):
 
 
 
-def get_need_processing(url):
+def get_need_processing(trav,url):
   act_cfgs=trav['cfg']['action_cfg']
   for acfg in act_cfgs:
     url_regex=acfg['selector']['url_regex']
@@ -321,23 +322,23 @@ def create_symlinks(trav,url,url_id):
             #не сработал.
             os.symlink(realfile_name,symlink_name)
 
-def url_processing_new_urls(trav,resp):
+def url_processing_new_urls(trav,data):
   new_urls_for_this_page=0
   urls_table_name=trav['urls_table_name']
   child_parent_table_name=trav['child_parent_table_name']
   child_parent_err_table_name=trav['child_parent_err_table_name']
-  urls=resp['urls']
-  parent_ID=trav['url_ID']
+  urls=data['urls']
+  parent_id=trav['url_ID']
   last_processing_date=0
   insert_date=int(time.time())
   processing=False
   error_type=prerr.OK
   for url in urls:
-    need_processing=get_need_processing(url)
+    need_processing=get_need_processing(trav,url)
     if not url_exists(urls_table_name,url):
       res=db.execute("INSERT INTO {tn} \
         (url,last_processing_date,insert_date,processing,need_processing,error_type) \
-        VALUES (?,?,?,?,?,?,?,?)".format(tn=urls_table_name),
+        VALUES (?,?,?,?,?,?)".format(tn=urls_table_name),
         (url,last_processing_date,insert_date,processing,need_processing,error_type)
       )
       child_id=res.lastrowid
@@ -345,7 +346,7 @@ def url_processing_new_urls(trav,resp):
       res=db.execute("SELECT id FROM {tn} where url=?".format(tn=urls_table_name),(url,))
       child_id=next(res)[0]
     res=db.execute("SELECT 1 FROM {cpt} where child_id={child_id} and parent_id={parent_id}".format(
-              cpt=child_parent_table,
+              cpt=child_parent_table_name,
               child_id=child_id,
               parent_id=parent_id))
     if next(res,None)==None:
@@ -365,8 +366,7 @@ def url_processing_new_urls(trav,resp):
     #и файлы из данной url уже созданы, то необходимо создать symlinks.
     #Если же файла нету, то symlinks будут созданы при создании файла.
     create_symlinks(trav,url,child_id)
-      
-  sqline_conn.commit()
+  db.commit()
   return new_urls_for_this_page
 
 def make_dirs(filename):
@@ -401,9 +401,8 @@ def make_symlink_name(url_processing,url,suffix):
   base_name_up=get_base_name( url_processing )
   hashval=int(hashlib.md5(base_name_up).hexdigest(),16) % prime_number_for_files
   filename='data/{base_url}/url_content/{hashval:05d}/{base_name_up}/{base_name}{suffix}'.format(
-    name=name,
+    base_url=base_url,
     hashval=hashval,
-    fname=fname,
     base_name=base_name,
     suffix=suffix,
     base_name_up=base_name_up
@@ -425,12 +424,12 @@ def make_filename(url,suffix):
   base_url=get_base_url( url )
   base_name=get_base_name( url )
   hashval=int(hashlib.md5(base_name).hexdigest(),16) % prime_number_for_files
-  filename='data/{base_url}/files/{hashval}/{base_name}{suffix}'.format(name=name,hashval=hashval,fname=fname,base_name=base_name,suffix=suffix)
+  filename='data/{base_url}/files/{hashval}/{base_name}{suffix}'.format(base_url=base_url,hashval=hashval,base_name=base_name,suffix=suffix)
   return filename
 
 
-def url_processing_new_files(trav,resp):
-  files=resp['files']
+def url_processing_new_files(trav,data):
+  files=data['files']
   url_processing=trav['url_processing']
   url_processing_id=trav['url_id']
   for p in files:
@@ -459,10 +458,11 @@ def url_processing_new_files(trav,resp):
 
 
 def url_processing_new_data(trav,resp):
-  if resp['type']=='urls':
-    url_processing_new_urls(trav,resp)
-  elif resp['type']=='files':
-    url_processing_new_files(trav,resp)
+  data=resp['data']
+  if data['type']=='urls':
+    url_processing_new_urls(trav,data)
+  elif data['type']=='files':
+    url_processing_new_files(trav,data)
   else:
     raise unimpl
   
@@ -480,7 +480,7 @@ def url_processing_done(trav):
   db.execute("DELETE FROM {tn} WHERE parent_id={ID}".format(
     tn=child_parent_err_table_name,ID=ID))
   db.commit()
-  trav['status']=ts.ready
+  trav['state']=ts.ready
 
 def url_processing_error(trav,resp):
   type_str=resp['type']
@@ -604,7 +604,7 @@ def get_url(trav):
   return (ID,url)
 
 
-def send_rquests(travs):
+def send_requests(travs):
   if all_travs_have_state(travs,(ts.error,)):
     return True
   for trav in travs:
@@ -624,10 +624,10 @@ def exists_state(travs,states):
   return False
 
 def process_urls(travs):
-  all_done=send_rquests(travs)
+  all_done=send_requests(travs)
   while not all_done:
     receive_resp(travs)
-    all_done=send_rquests(travs)
+    all_done=send_requests(travs)
     if all_done and not exists_state(travs,(ts.processing,)):
       break
 

@@ -11,10 +11,11 @@ def traverse(fd_r,fd_w,marionette_port):
   act={ 'action':'cfId_request','features':[("A","Загрузить еще","b-pager__button m-button-more")] }
   comm.literal_send(fd_w,act)
   req=comm.literal_recv(fd_r); print req
-  act={'action':'urls', 'data':{'type':'urls','buttonId':1,'urls':[
+  act={'action':'data', 'data':{'type':'urls','buttonId':1,'urls':[
     'https://ria.ru/world/20161030/1480319963.html',
     'https://ria.ru/economy/20161030/1480320038.html',
   ]}}
+  comm.literal_send(fd_w,act)
   act={ 'action':'done' }
   comm.literal_send(fd_w,act)
 
